@@ -1,6 +1,5 @@
-const CACHE_NAME = 'real-estate-system-v1';
+const CACHE_NAME = 'real-estate-system-v2';
 const PRECACHE_URLS = [
-  '/',
   '/offline.html',
   '/manifest.webmanifest',
   '/icons/icon.svg',
@@ -31,17 +30,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (request.method !== 'GET') {
+    return;
+  }
+
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          return response;
-        })
-        .catch(() =>
-          caches.match(request).then((cached) => cached || caches.match('/offline.html'))
-        )
+      fetch(request).catch(() => caches.match('/offline.html'))
     );
     return;
   }
