@@ -1,0 +1,70 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import Sidebar from './Sidebar';
+
+export default function AuthGuard({ children, allowedRoles = ['admin', 'accountant', 'rep'] }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [authorized, setAuthorized] = useState(false);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    // Check if user is logged in
+    const storedUser = localStorage.getItem('erp_user');
+    
+    if (!storedUser) {
+      if (pathname !== '/') {
+        router.push('/');
+      } else {
+        setAuthorized(true); // Allow access to login page if not logged in
+      }
+      return;
+    }
+
+    try {
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+
+      // If user is logged in and on login page, redirect to dashboard
+      if (pathname === '/') {
+        router.push('/dashboard');
+        return;
+      }
+
+      // Check role permissions
+      if (allowedRoles.includes(parsedUser.role)) {
+        setAuthorized(true);
+      } else {
+        // Redirect to a default authorized page or show unauthorized message
+        router.push('/dashboard'); 
+      }
+    } catch (e) {
+      localStorage.removeItem('erp_user');
+      router.push('/');
+    }
+  }, [pathname, router, allowedRoles]);
+
+  if (!authorized) {
+    return (
+      <div className="loading-spinner">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  // If on login page, don't show layout/sidebar
+  if (pathname === '/') {
+    return <>{children}</>;
+  }
+
+  return (
+    <div className="app-layout">
+      {user && <Sidebar user={user} />}
+      <main className="main-content">
+        {children}
+      </main>
+    </div>
+  );
+}
