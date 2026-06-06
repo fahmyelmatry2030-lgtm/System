@@ -1,4 +1,4 @@
-import getDb from '@/lib/db';
+import { query } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
 export async function GET(request) {
@@ -8,14 +8,13 @@ export async function GET(request) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     
-    const db = getDb();
-    let data = {};
+        let data = {};
 
     if (type === 'financial') {
-      const sales = db.prepare('SELECT SUM(total) as total, SUM(paidAmount) as paid FROM sales').get();
-      const purchases = db.prepare('SELECT SUM(total) as total, SUM(paidAmount) as paid FROM purchases').get();
-      const expenses = db.prepare('SELECT SUM(amount) as total FROM expenses').get();
-      const damaged = db.prepare('SELECT SUM(value) as total FROM damaged').get();
+      const sales = (await query('SELECT SUM(total) as total, SUM(paidAmount) as paid FROM sales').get();
+      const purchases = (await query('SELECT SUM(total) as total, SUM(paidAmount) as paid FROM purchases').get();
+      const expenses = (await query('SELECT SUM(amount) as total FROM expenses')).rows[0];
+      const damaged = (await query('SELECT SUM(value) as total FROM damaged')).rows[0];
       
       data = {
         totalSales: sales.total || 0,
@@ -27,11 +26,11 @@ export async function GET(request) {
         netProfit: (sales.total || 0) - (purchases.total || 0) - (expenses.total || 0) - (damaged.total || 0)
       };
     } else if (type === 'inventory') {
-      data.products = db.prepare('SELECT COUNT(*) as count, SUM(qty * purchasePrice) as value FROM products').get();
-      data.lowStock = db.prepare('SELECT * FROM products WHERE qty <= threshold').all();
+      data.products = (await query('SELECT COUNT(*) as count, SUM(qty * purchasePrice) as value FROM products')).rows[0];
+      data.lowStock = (await query('SELECT * FROM products WHERE qty <= threshold')).rows;
     } else if (type === 'debt') {
-      data.customers = db.prepare('SELECT id, name, balance FROM customers WHERE balance > 0 ORDER BY balance DESC').all();
-      data.suppliers = db.prepare('SELECT id, name, balance FROM suppliers WHERE balance > 0 ORDER BY balance DESC').all();
+      data.customers = (await query('SELECT id, name, balance FROM customers WHERE balance > 0 ORDER BY balance DESC')).rows;
+      data.suppliers = (await query('SELECT id, name, balance FROM suppliers WHERE balance > 0 ORDER BY balance DESC')).rows;
     } else if (type === 'sales') {
       let query = 'SELECT * FROM sales';
       let params = [];
@@ -61,7 +60,7 @@ export async function GET(request) {
       });
       data.byRep = Object.values(byRep);
     } else if (type === 'purchases') {
-      const purchases = db.prepare('SELECT * FROM purchases ORDER BY date DESC').all();
+      const purchases = (await query('SELECT * FROM purchases ORDER BY date DESC')).rows;
       
       data.purchases = purchases;
       data.totalPurchases = purchases.reduce((sum, p) => sum + p.total, 0);
@@ -80,32 +79,32 @@ export async function GET(request) {
       });
       data.bySupplier = Object.values(bySupplier);
     } else if (type === 'stocktake') {
-      const stocktakes = db.prepare('SELECT * FROM stocktakes ORDER BY date DESC').all();
+      const stocktakes = (await query('SELECT * FROM stocktakes ORDER BY date DESC')).rows;
       
       data.stocktakes = stocktakes;
       data.surplus = stocktakes.filter(st => st.status === 'surplus').reduce((sum, st) => sum + Math.abs(st.difference * st.purchasePrice || 0), 0);
       data.deficit = stocktakes.filter(st => st.status === 'deficit').reduce((sum, st) => sum + Math.abs(st.difference * st.purchasePrice || 0), 0);
     } else if (type === 'damaged') {
-      const damaged = db.prepare('SELECT * FROM damaged ORDER BY date DESC').all();
+      const damaged = (await query('SELECT * FROM damaged ORDER BY date DESC')).rows;
       const today = new Date().toISOString().split('T')[0];
-      const expired = db.prepare('SELECT * FROM products WHERE expiryDate < ?').all(today);
+      const expired = (await query('SELECT * FROM products WHERE expiryDate < ?', [today])).rows;
       
       data.damaged = damaged;
       data.totalLoss = damaged.reduce((sum, d) => sum + d.value, 0);
       data.expired = expired;
     } else if (type === 'collections') {
-      const collections = db.prepare('SELECT * FROM collections ORDER BY date DESC').all();
-      const totalDebt = db.prepare('SELECT SUM(balance) as total FROM customers').get().total || 0;
+      const collections = db.prepare('SELECT * FROM collections ORDER BY date DESC')).rows;
+      const totalDebt = db.prepare('SELECT SUM(balance) as total FROM customers')).rows[0].total || 0;
       
       data.collections = collections;
       data.totalCollected = collections.reduce((sum, c) => sum + c.amount, 0);
       data.totalDebt = totalDebt;
     } else {
       // Basic summary
-      data.salesCount = db.prepare('SELECT COUNT(*) as c FROM sales').get().c;
-      data.purchasesCount = db.prepare('SELECT COUNT(*) as c FROM purchases').get().c;
-      data.customersCount = db.prepare('SELECT COUNT(*) as c FROM customers').get().c;
-      data.productsCount = db.prepare('SELECT COUNT(*) as c FROM products').get().c;
+      data.salesCount = (await query('SELECT COUNT(*) as c FROM sales')).rows[0].c;
+      data.purchasesCount = (await query('SELECT COUNT(*) as c FROM purchases')).rows[0].c;
+      data.customersCount = (await query('SELECT COUNT(*) as c FROM customers')).rows[0].c;
+      data.productsCount = (await query('SELECT COUNT(*) as c FROM products')).rows[0].c;
     }
 
     return NextResponse.json(data);

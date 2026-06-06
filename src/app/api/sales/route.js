@@ -1,11 +1,10 @@
-import getDb from '@/lib/db';
+import { query } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
 export async function GET(request) {
   try {
-    const db = getDb();
-    const sales = db.prepare('SELECT * FROM sales ORDER BY createdAt DESC').all();
-    const saleItems = db.prepare('SELECT * FROM sale_items').all();
+        const sales = (await query('SELECT * FROM sales ORDER BY createdAt DESC')).rows;
+    const saleItems = (await query('SELECT * FROM sale_items')).rows;
     
     const salesWithItems = sales.map(s => ({
       ...s,
@@ -20,8 +19,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const data = await request.json();
-    const db = getDb();
-    const { customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, items } = data;
+        const { customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, items } = data;
     const id = 'INV-S' + Date.now();
     
     const insertSale = db.prepare('INSERT INTO sales (id, customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName) VALUES (?,?,?,?,?,?,?,?,?)');
@@ -48,12 +46,10 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     const data = await request.json();
-    const db = getDb();
-    const { id, customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName } = data;
+        const { id, customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName } = data;
     if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
 
-    const stmt = db.prepare('UPDATE sales SET customerId=?, customerName=?, date=?, total=?, paidAmount=?, paymentStatus=?, repId=?, repName=? WHERE id=?');
-    stmt.run(customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, id);
+    await query('UPDATE sales SET customerId=?, customerName=?, date=?, total=?, paidAmount=?, paymentStatus=?, repId=?, repName=? WHERE id=?', [customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, id]);
     
     return NextResponse.json({ success: true, id });
   } catch (error) {
@@ -65,8 +61,7 @@ export async function DELETE(request) {
   try {
     const id = request.nextUrl.searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
-    const db = getDb();
-    
+        
     const getItems = db.prepare('SELECT * FROM sale_items WHERE saleId=?');
     const items = getItems.all(id);
     const deleteSale = db.prepare('DELETE FROM sales WHERE id=?');

@@ -1,11 +1,10 @@
-import getDb from '@/lib/db';
+import { query } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
 export async function GET(request) {
   try {
-    const db = getDb();
-    const returns = db.prepare('SELECT * FROM returns ORDER BY date DESC').all();
-    const returnItems = db.prepare('SELECT * FROM return_items').all();
+        const returns = (await query('SELECT * FROM returns ORDER BY date DESC')).rows;
+    const returnItems = (await query('SELECT * FROM return_items')).rows;
     
     const returnsWithItems = returns.map(r => ({
       ...r,
@@ -20,11 +19,10 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const data = await request.json();
-    const db = getDb();
-    const { type, entityId, entityName, date, reason, total, items } = data;
+        const { type, entityId, entityName, date, reason, total, items } = data;
     const id = 'RET-' + Date.now();
     
-    const insertReturn = db.prepare('INSERT INTO returns (id, type, entityId, entityName, date, reason, total) VALUES (?,?,?,?,?,?,?)');
+    const insertReturn = (await query('INSERT INTO returns (id, type, entityId, entityName, date, reason, total) VALUES (?,?,?,?,?,?,?)');
     const insertItem = db.prepare('INSERT INTO return_items (returnId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)');
     // If supplier return, decrease product qty
     const updateProduct = db.prepare('UPDATE products SET qty = qty - ? WHERE id = ?');
@@ -52,9 +50,8 @@ export async function DELETE(request) {
   try {
     const id = request.nextUrl.searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
-    const db = getDb();
-    
-    const returnRecord = db.prepare('SELECT type FROM returns WHERE id=?').get(id);
+        
+    const returnRecord = db.prepare('SELECT type FROM returns WHERE id=?', [id])).rows[0];
     const getItems = db.prepare('SELECT * FROM return_items WHERE returnId=?');
     const items = getItems.all(id);
     const deleteReturn = db.prepare('DELETE FROM returns WHERE id=?');

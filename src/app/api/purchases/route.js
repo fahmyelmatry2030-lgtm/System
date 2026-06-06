@@ -1,11 +1,10 @@
-import getDb from '@/lib/db';
+import { query } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
 export async function GET(request) {
   try {
-    const db = getDb();
-    const purchases = db.prepare('SELECT * FROM purchases ORDER BY createdAt DESC').all();
-    const purchaseItems = db.prepare('SELECT * FROM purchase_items').all();
+        const purchases = (await query('SELECT * FROM purchases ORDER BY createdAt DESC')).rows;
+    const purchaseItems = (await query('SELECT * FROM purchase_items')).rows;
     
     const purchasesWithItems = purchases.map(p => ({
       ...p,
@@ -20,8 +19,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const data = await request.json();
-    const db = getDb();
-    const { supplierId, supplierName, date, total, paidAmount, items } = data;
+        const { supplierId, supplierName, date, total, paidAmount, items } = data;
     const id = 'INV-P' + Date.now();
     
     const insertPurchase = db.prepare('INSERT INTO purchases (id, supplierId, supplierName, date, total, paidAmount) VALUES (?,?,?,?,?,?)');
@@ -48,12 +46,10 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     const data = await request.json();
-    const db = getDb();
-    const { id, supplierId, supplierName, date, total, paidAmount } = data;
+        const { id, supplierId, supplierName, date, total, paidAmount } = data;
     if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
 
-    const stmt = db.prepare('UPDATE purchases SET supplierId=?, supplierName=?, date=?, total=?, paidAmount=? WHERE id=?');
-    stmt.run(supplierId, supplierName, date, total, paidAmount, id);
+    await query('UPDATE purchases SET supplierId=?, supplierName=?, date=?, total=?, paidAmount=? WHERE id=?', [supplierId, supplierName, date, total, paidAmount, id]);
     
     return NextResponse.json({ success: true, id });
   } catch (error) {
@@ -65,8 +61,7 @@ export async function DELETE(request) {
   try {
     const id = request.nextUrl.searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
-    const db = getDb();
-    
+        
     const getItems = db.prepare('SELECT * FROM purchase_items WHERE purchaseId=?');
     const items = getItems.all(id);
     const deletePurchase = db.prepare('DELETE FROM purchases WHERE id=?');

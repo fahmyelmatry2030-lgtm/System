@@ -1,4 +1,4 @@
-import getDb from '@/lib/db';
+import { query } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
 export async function POST(request) {
@@ -9,8 +9,8 @@ export async function POST(request) {
       return NextResponse.json({ error: 'الرجاء إدخال اسم المستخدم وكلمة المرور' }, { status: 400 });
     }
 
-    const db = getDb();
-    const user = db.prepare('SELECT id, username, fullName, role FROM users WHERE username = ? AND password = ? AND active = 1').get(username, password);
+    const result = await query('SELECT id, username, fullName, role FROM users WHERE username = ? AND password = ? AND active = 1', [username, password]);
+    const user = result.rows[0];
 
     if (!user) {
       return NextResponse.json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' }, { status: 401 });

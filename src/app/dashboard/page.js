@@ -1,19 +1,17 @@
 import DashboardCard from '@/components/DashboardCard';
 import { DollarSign, Wallet, LineChart, Receipt, Layers, Box, AlertTriangle, Users, ShoppingCart, ArrowDownLeft, FileText } from 'lucide-react';
-import getDb from '@/lib/db';
+import { query } from '@/lib/db';
 
 export default async function Dashboard() {
-  const db = getDb();
-
   // Aggregate Queries
-  const products = db.prepare('SELECT * FROM products').all();
-  const sales = db.prepare('SELECT * FROM sales').all();
-  const purchases = db.prepare('SELECT * FROM purchases').all();
-  const suppliers = db.prepare('SELECT * FROM suppliers').all();
-  const customers = db.prepare('SELECT * FROM customers').all();
-  const expenses = db.prepare('SELECT * FROM expenses').all();
-  const damaged = db.prepare('SELECT * FROM damaged').all();
-  const categories = db.prepare('SELECT DISTINCT category FROM products WHERE category IS NOT NULL').all();
+  const products = (await query('SELECT * FROM products')).rows;
+  const sales = (await query('SELECT * FROM sales')).rows;
+  const purchases = (await query('SELECT * FROM purchases')).rows;
+  const suppliers = (await query('SELECT * FROM suppliers')).rows;
+  const customers = (await query('SELECT * FROM customers')).rows;
+  const expenses = (await query('SELECT * FROM expenses')).rows;
+  const damaged = (await query('SELECT * FROM damaged')).rows;
+  const categories = (await query('SELECT DISTINCT category FROM products WHERE category IS NOT NULL')).rows;
   
   // Calculate Metrics
   const totalStockValue = products.reduce((acc, p) => acc + (p.qty * p.sellPrice), 0);
@@ -31,11 +29,11 @@ export default async function Dashboard() {
   const totalPaidPurchases = purchases.reduce((acc, p) => acc + p.paidAmount, 0);
   
   // Sales Profit Calculation
-  const saleItems = db.prepare(`
+  const saleItems = (await query(`
     SELECT si.*, p.purchasePrice 
     FROM sale_items si 
     LEFT JOIN products p ON si.productId = p.id
-  `).all();
+  `)).rows;
   const salesProfit = saleItems.reduce((acc, item) => {
     const cost = (item.purchasePrice || 0) * item.qty;
     return acc + (item.total - cost);
