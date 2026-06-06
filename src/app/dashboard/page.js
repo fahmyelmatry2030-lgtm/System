@@ -2,6 +2,7 @@ import DashboardCard from '@/components/DashboardCard';
 import { DollarSign, Wallet, LineChart, Receipt, Layers, Box, AlertTriangle, Users, ShoppingCart, ArrowDownLeft, FileText } from 'lucide-react';
 import { query } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
 export default async function Dashboard() {
   // Aggregate Queries
   const products = (await query('SELECT * FROM products')).rows;

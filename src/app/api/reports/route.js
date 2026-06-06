@@ -8,11 +8,11 @@ export async function GET(request) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     
-        let data = {};
+    let data = {};
 
     if (type === 'financial') {
-      const sales = (await query('SELECT SUM(total) as total, SUM(paidAmount) as paid FROM sales').get();
-      const purchases = (await query('SELECT SUM(total) as total, SUM(paidAmount) as paid FROM purchases').get();
+      const sales = (await query('SELECT SUM(total) as total, SUM(paidAmount) as paid FROM sales')).rows[0];
+      const purchases = (await query('SELECT SUM(total) as total, SUM(paidAmount) as paid FROM purchases')).rows[0];
       const expenses = (await query('SELECT SUM(amount) as total FROM expenses')).rows[0];
       const damaged = (await query('SELECT SUM(value) as total FROM damaged')).rows[0];
       
@@ -32,26 +32,26 @@ export async function GET(request) {
       data.customers = (await query('SELECT id, name, balance FROM customers WHERE balance > 0 ORDER BY balance DESC')).rows;
       data.suppliers = (await query('SELECT id, name, balance FROM suppliers WHERE balance > 0 ORDER BY balance DESC')).rows;
     } else if (type === 'sales') {
-      let query = 'SELECT * FROM sales';
+      let sqlQuery = 'SELECT * FROM sales';
       let params = [];
       
       if (startDate && endDate) {
-        query += ' WHERE date BETWEEN ? AND ?';
+        sqlQuery += ' WHERE date BETWEEN ? AND ?';
         params.push(startDate, endDate);
       }
       
-      query += ' ORDER BY date DESC';
-      const sales = db.prepare(query).all(...params);
+      sqlQuery += ' ORDER BY date DESC';
+      const sales = (await query(sqlQuery, params)).rows;
       
       data.sales = sales;
       data.totalSales = sales.reduce((sum, s) => sum + s.total, 0);
-      data.totalPaid = sales.reduce((sum, s) => sum + s.paidAmount, 0);
+      data.totalPaid = sales.reduce((sum, s) => sum + s.paidamount, 0);
       data.totalRemaining = data.totalSales - data.totalPaid;
       
       // Group by rep
       const byRep = {};
       sales.forEach(s => {
-        const repName = s.repName || 'غير محدد';
+        const repName = s.repname || 'غير محدد';
         if (!byRep[repName]) {
           byRep[repName] = { repName, count: 0, total: 0 };
         }
@@ -64,13 +64,13 @@ export async function GET(request) {
       
       data.purchases = purchases;
       data.totalPurchases = purchases.reduce((sum, p) => sum + p.total, 0);
-      data.totalPaid = purchases.reduce((sum, p) => sum + p.paidAmount, 0);
+      data.totalPaid = purchases.reduce((sum, p) => sum + p.paidamount, 0);
       data.totalRemaining = data.totalPurchases - data.totalPaid;
       
       // Group by supplier
       const bySupplier = {};
       purchases.forEach(p => {
-        const supplierName = p.supplierName;
+        const supplierName = p.suppliername;
         if (!bySupplier[supplierName]) {
           bySupplier[supplierName] = { supplierName, count: 0, total: 0 };
         }
@@ -93,8 +93,9 @@ export async function GET(request) {
       data.totalLoss = damaged.reduce((sum, d) => sum + d.value, 0);
       data.expired = expired;
     } else if (type === 'collections') {
-      const collections = db.prepare('SELECT * FROM collections ORDER BY date DESC')).rows;
-      const totalDebt = db.prepare('SELECT SUM(balance) as total FROM customers')).rows[0].total || 0;
+      const collections = (await query('SELECT * FROM collections ORDER BY date DESC')).rows;
+      const totalDebtResult = (await query('SELECT SUM(balance) as total FROM customers')).rows[0];
+      const totalDebt = totalDebtResult.total || 0;
       
       data.collections = collections;
       data.totalCollected = collections.reduce((sum, c) => sum + c.amount, 0);

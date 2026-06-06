@@ -3,12 +3,12 @@ import { NextResponse } from 'next/server';
 
 export async function GET(request) {
   try {
-        const purchases = (await query('SELECT * FROM purchases ORDER BY createdAt DESC')).rows;
+    const purchases = (await query('SELECT * FROM purchases ORDER BY createdAt DESC')).rows;
     const purchaseItems = (await query('SELECT * FROM purchase_items')).rows;
     
     const purchasesWithItems = purchases.map(p => ({
       ...p,
-      items: purchaseItems.filter(i => i.purchaseId === p.id)
+      items: purchaseItems.filter(i => i.purchaseid === p.id)
     }));
     return NextResponse.json({ purchases: purchasesWithItems });
   } catch (error) {
@@ -19,23 +19,17 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const data = await request.json();
-        const { supplierId, supplierName, date, total, paidAmount, items } = data;
+    const { supplierId, supplierName, date, total, paidAmount, items } = data;
     const id = 'INV-P' + Date.now();
     
-    const insertPurchase = db.prepare('INSERT INTO purchases (id, supplierId, supplierName, date, total, paidAmount) VALUES (?,?,?,?,?,?)');
-    const insertItem = db.prepare('INSERT INTO purchase_items (purchaseId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)');
-    const updateProduct = db.prepare('UPDATE products SET qty = qty + ? WHERE id = ?');
+    await query('INSERT INTO purchases (id, supplierId, supplierName, date, total, paidAmount) VALUES (?,?,?,?,?,?)', [id, supplierId, supplierName, date, total || 0, paidAmount || 0]);
     
-    const transaction = db.transaction(() => {
-      insertPurchase.run(id, supplierId, supplierName, date, total || 0, paidAmount || 0);
-      if (items && Array.isArray(items)) {
-        for (const item of items) {
-          insertItem.run(id, item.productId, item.productName, item.qty, item.price, item.qty * item.price);
-          updateProduct.run(item.qty, item.productId);
-        }
+    if (items && Array.isArray(items)) {
+      for (const item of items) {
+        await query('INSERT INTO purchase_items (purchaseId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', [id, item.productId, item.productName, item.qty, item.price, item.qty * item.price]);
+        await query('UPDATE products SET qty = qty + ? WHERE id = ?', [item.qty, item.productId]);
       }
-    });
-    transaction();
+    }
     
     return NextResponse.json({ success: true, id });
   } catch (error) {
@@ -46,7 +40,7 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     const data = await request.json();
-        const { id, supplierId, supplierName, date, total, paidAmount } = data;
+    const { id, supplierId, supplierName, date, total, paidAmount } = data;
     if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
 
     await query('UPDATE purchases SET supplierId=?, supplierName=?, date=?, total=?, paidAmount=? WHERE id=?', [supplierId, supplierName, date, total, paidAmount, id]);
@@ -61,21 +55,13 @@ export async function DELETE(request) {
   try {
     const id = request.nextUrl.searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
-        
-    const getItems = db.prepare('SELECT * FROM purchase_items WHERE purchaseId=?');
-    const items = getItems.all(id);
-    const deletePurchase = db.prepare('DELETE FROM purchases WHERE id=?');
-    const deleteItems = db.prepare('DELETE FROM purchase_items WHERE purchaseId=?');
-    const updateProduct = db.prepare('UPDATE products SET qty = qty - ? WHERE id = ?');
     
-    const transaction = db.transaction(() => {
-      for (const item of items) {
-        updateProduct.run(item.qty, item.productId);
-      }
-      deleteItems.run(id);
-      deletePurchase.run(id);
-    });
-    transaction();
+    const items = (await query('SELECT * FROM purchase_items WHERE purchaseId=?', [id])).rows;
+    for (const item of items) {
+      await query('UPDATE products SET qty = qty - ? WHERE id = ?', [item.qty, item.productid]);
+    }
+    await query('DELETE FROM purchase_items WHERE purchaseId=?', [id]);
+    await query('DELETE FROM purchases WHERE id=?', [id]);
     
     return NextResponse.json({ success: true, id });
   } catch (error) {
