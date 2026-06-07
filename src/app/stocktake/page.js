@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
+import PostStatusBadge from '@/components/PostStatusBadge';
+import PostActions from '@/components/PostActions';
+import { withUser } from '@/lib/api-client';
 
 export default function Stocktake() {
   const [stocktakes, setStocktakes] = useState([]);
@@ -57,14 +60,14 @@ export default function Stocktake() {
       const res = await fetch('/api/stocktake', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(withUser({
           ...formData,
           productName: product.name,
           systemQty: product.qty,
           physicalQty,
           difference,
           status
-        })
+        }))
       });
       
       if (res.ok) {
@@ -105,7 +108,9 @@ export default function Stocktake() {
         </span>
       )
     },
-    { header: 'ملاحظات', accessor: 'notes' }
+    { header: 'ملاحظات', accessor: 'notes' },
+    { header: 'الترحيل', render: (row) => <PostStatusBadge record={row} /> },
+    { header: 'إجراءات', render: (row) => <PostActions entity="stocktakes" record={row} onPosted={fetchData} /> },
   ];
 
   return (

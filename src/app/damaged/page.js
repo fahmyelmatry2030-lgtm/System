@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
+import PostStatusBadge from '@/components/PostStatusBadge';
+import PostActions from '@/components/PostActions';
+import { formatCurrency } from '@/lib/currency';
+import { withUser } from '@/lib/api-client';
 
 export default function Damaged() {
   const [damaged, setDamaged] = useState([]);
@@ -52,12 +56,12 @@ export default function Damaged() {
       const res = await fetch('/api/damaged', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(withUser({
           ...formData,
           productName: product ? product.name : '',
           qty: parseInt(formData.qty),
           value: product ? product.purchasePrice * parseInt(formData.qty) : 0
-        })
+        }))
       });
       
       if (res.ok) {
@@ -86,7 +90,9 @@ export default function Damaged() {
       )
     },
     { header: 'السبب الموثق', accessor: 'reason' },
-    { header: 'قيمة الخسارة', accessor: 'value', render: (row) => <span>{row.value} ﷼</span> }
+    { header: 'قيمة الخسارة', accessor: 'value', render: (row) => <span>{formatCurrency(row.value)}</span> },
+    { header: 'الترحيل', render: (row) => <PostStatusBadge record={row} /> },
+    { header: 'إجراءات', render: (row) => <PostActions entity="damaged" record={row} onPosted={fetchData} /> },
   ];
 
   return (

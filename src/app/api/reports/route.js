@@ -11,10 +11,10 @@ export async function GET(request) {
     let data = {};
 
     if (type === 'financial') {
-      const sales = (await query('SELECT SUM(total) as total, SUM(paidAmount) as paid FROM sales')).rows[0];
-      const purchases = (await query('SELECT SUM(total) as total, SUM(paidAmount) as paid FROM purchases')).rows[0];
-      const expenses = (await query('SELECT SUM(amount) as total FROM expenses')).rows[0];
-      const damaged = (await query('SELECT SUM(value) as total FROM damaged')).rows[0];
+      const sales = (await query("SELECT SUM(total) as total, SUM(paidAmount) as paid FROM sales WHERE postStatus = 'posted'")).rows[0];
+      const purchases = (await query("SELECT SUM(total) as total, SUM(paidAmount) as paid FROM purchases WHERE postStatus = 'posted'")).rows[0];
+      const expenses = (await query("SELECT SUM(amount) as total FROM expenses WHERE postStatus = 'posted'")).rows[0];
+      const damaged = (await query("SELECT SUM(value) as total FROM damaged WHERE postStatus = 'posted'")).rows[0];
       
       data = {
         totalSales: sales.total || 0,
@@ -32,11 +32,11 @@ export async function GET(request) {
       data.customers = (await query('SELECT id, name, balance FROM customers WHERE balance > 0 ORDER BY balance DESC')).rows;
       data.suppliers = (await query('SELECT id, name, balance FROM suppliers WHERE balance > 0 ORDER BY balance DESC')).rows;
     } else if (type === 'sales') {
-      let sqlQuery = 'SELECT * FROM sales';
+      let sqlQuery = "SELECT * FROM sales WHERE postStatus = 'posted'";
       let params = [];
       
       if (startDate && endDate) {
-        sqlQuery += ' WHERE date BETWEEN ? AND ?';
+        sqlQuery += ' AND date BETWEEN ? AND ?';
         params.push(startDate, endDate);
       }
       
@@ -60,7 +60,7 @@ export async function GET(request) {
       });
       data.byRep = Object.values(byRep);
     } else if (type === 'purchases') {
-      const purchases = (await query('SELECT * FROM purchases ORDER BY date DESC')).rows;
+      const purchases = (await query("SELECT * FROM purchases WHERE postStatus = 'posted' ORDER BY date DESC")).rows;
       
       data.purchases = purchases;
       data.totalPurchases = purchases.reduce((sum, p) => sum + p.total, 0);
@@ -93,7 +93,7 @@ export async function GET(request) {
       data.totalLoss = damaged.reduce((sum, d) => sum + d.value, 0);
       data.expired = expired;
     } else if (type === 'collections') {
-      const collections = (await query('SELECT * FROM collections ORDER BY date DESC')).rows;
+      const collections = (await query("SELECT * FROM collections WHERE postStatus = 'posted' ORDER BY date DESC")).rows;
       const totalDebtResult = (await query('SELECT SUM(balance) as total FROM customers')).rows[0];
       const totalDebt = totalDebtResult.total || 0;
       

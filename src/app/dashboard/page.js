@@ -1,6 +1,8 @@
 import DashboardCard from '@/components/DashboardCard';
+import PendingAlert from '@/components/PendingAlert';
 import { DollarSign, Wallet, LineChart, Receipt, Layers, Box, AlertTriangle, Users, ShoppingCart, ArrowDownLeft, FileText } from 'lucide-react';
 import { query } from '@/lib/db';
+import { formatCurrency } from '@/lib/currency';
 
 export const dynamic = 'force-dynamic';
 export default async function Dashboard() {
@@ -63,8 +65,6 @@ export default async function Dashboard() {
   // Supplier debt
   const totalSupplierDebt = suppliers.reduce((acc, s) => acc + s.balance, 0);
 
-  const formatCurrency = (num) => new Intl.NumberFormat('en-US').format(num) + ' ﷼';
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -73,6 +73,8 @@ export default async function Dashboard() {
           لوحة القيادة
         </h2>
       </div>
+
+      <PendingAlert />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         <DashboardCard 

@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
+import PostStatusBadge from '@/components/PostStatusBadge';
+import PostActions from '@/components/PostActions';
+import { formatCurrency } from '@/lib/currency';
+import { withUser } from '@/lib/api-client';
 
 export default function Expenses() {
   const [expenses, setExpenses] = useState([]);
@@ -41,10 +45,10 @@ export default function Expenses() {
       const res = await fetch('/api/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(withUser({
           ...formData,
           amount: parseFloat(formData.amount)
-        })
+        }))
       });
       
       if (res.ok) {
@@ -68,8 +72,10 @@ export default function Expenses() {
         </span>
       )
     },
-    { header: 'المبلغ', accessor: 'amount', render: (row) => <span style={{fontWeight: 'bold'}}>{row.amount} ﷼</span> },
-    { header: 'البيان', accessor: 'description' }
+    { header: 'المبلغ', accessor: 'amount', render: (row) => <span style={{fontWeight: 'bold'}}>{formatCurrency(row.amount)}</span> },
+    { header: 'الترحيل', render: (row) => <PostStatusBadge record={row} /> },
+    { header: 'البيان', accessor: 'description' },
+    { header: 'إجراءات', render: (row) => <PostActions entity="expenses" record={row} onPosted={fetchExpenses} /> },
   ];
 
   return (
@@ -137,7 +143,7 @@ export default function Expenses() {
           </div>
           
           <div className="form-group">
-            <label className="form-label">المبلغ (﷼)</label>
+            <label className="form-label">المبلغ (د.ع)</label>
             <input 
               type="number" 
               step="0.01"

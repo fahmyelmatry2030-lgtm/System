@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
+import PostStatusBadge from '@/components/PostStatusBadge';
+import PostActions from '@/components/PostActions';
+import { formatCurrency } from '@/lib/currency';
+import { withUser, getStoredUser } from '@/lib/api-client';
 
 export default function ReturnsPage() {
   const [returns, setReturns] = useState([]);
@@ -12,6 +16,7 @@ export default function ReturnsPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [user, setUser] = useState(null);
   
   const [formData, setFormData] = useState({
     type: 'supplier',
@@ -49,6 +54,7 @@ export default function ReturnsPage() {
   };
 
   useEffect(() => {
+    setUser(getStoredUser());
     fetchData();
   }, []);
 
@@ -99,7 +105,7 @@ export default function ReturnsPage() {
       const res = await fetch('/api/returns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(withUser({
           ...formData,
           entityName: entity.name,
           total: calculateTotal(),
@@ -113,7 +119,7 @@ export default function ReturnsPage() {
               total: parseFloat(item.price) * parseInt(item.qty)
             };
           })
-        })
+        }))
       });
       
       if (res.ok) {
@@ -131,7 +137,7 @@ export default function ReturnsPage() {
   const handleDelete = async (id) => {
     if (confirm('هل أنت متأكد من حذف هذا المرتج؟')) {
       try {
-        await fetch(`/api/returns?id=${id}`, { method: 'DELETE' });
+        await fetch(`/api/returns?id=${id}&role=${user?.role || ''}`, { method: 'DELETE' });
         fetchData();
       } catch (err) {
         console.error(err);
@@ -155,13 +161,19 @@ export default function ReturnsPage() {
     { 
       header: 'الإجمالي', 
       accessor: 'total',
-      render: (row) => <span style={{fontWeight: 'bold'}}>{row.total} ﷼</span>
+      render: (row) => <span style={{fontWeight: 'bold'}}>{formatCurrency(row.total)}</span>
     },
+    { header: 'الترحيل', render: (row) => <PostStatusBadge record={row} /> },
     { header: 'السبب', accessor: 'reason' },
     { 
       header: 'إجراءات', 
       render: (item) => (
-        <button onClick={() => handleDelete(item.id)} className="text-red-500 hover:underline">حذف</button>
+        <div className="flex gap-2 items-center">
+          <PostActions entity="returns" record={item} onPosted={fetchData} />
+          {(user?.role === 'admin' || (item.postStatus || item.poststatus) !== 'posted') && (
+            <button onClick={() => handleDelete(item.id)} className="text-red-500 hover:underline">حذف</button>
+          )}
+        </div>
       )
     }
   ];
@@ -267,7 +279,7 @@ export default function ReturnsPage() {
                     <option value="">-- اختر المنتج --</option>
                     {products.map(p => (
                       <option key={p.id} value={p.id}>
-                        {p.name} - {formData.type === 'supplier' ? p.purchasePrice : p.sellPrice} ﷼
+                        {p.name} - {formatCurrency(formData.type === 'supplier' ? p.purchasePrice : p.sellPrice)}
                       </option>
                     ))}
                   </select>
@@ -318,7 +330,7 @@ export default function ReturnsPage() {
           <div style={{ marginTop: '20px', padding: '15px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', fontWeight: 'bold', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
               <span>الإجمالي النهائي:</span>
-              <span style={{ color: 'var(--primary)' }}>{calculateTotal()} ﷼</span>
+              <span style={{ color: 'var(--primary)' }}>{formatCurrency(calculateTotal())}</span>
             </div>
             {formData.type === 'supplier' && (
               <p style={{ marginTop: '10px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>

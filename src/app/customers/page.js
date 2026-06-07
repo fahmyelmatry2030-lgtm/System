@@ -4,11 +4,15 @@ import { useState, useEffect } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
+import { formatCurrency } from '@/lib/currency';
 
 export default function CustomersPage() {
   const [data, setData] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [statementOpen, setStatementOpen] = useState(false);
+  const [statement, setStatement] = useState(null);
+  const [statementLoading, setStatementLoading] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -37,7 +41,7 @@ export default function CustomersPage() {
   const handleDelete = async (id) => {
     if (confirm('هل أنت متأكد من حذف هذا العميل؟')) {
       try {
-        await fetch(`/api/customers/${id}`, { method: 'DELETE' });
+        await fetch(`/api/customers?id=${id}`, { method: 'DELETE' });
         fetchData();
       } catch (err) {
         console.error(err);
@@ -45,17 +49,31 @@ export default function CustomersPage() {
     }
   };
 
+  const handleStatement = async (customer) => {
+    setStatementOpen(true);
+    setStatementLoading(true);
+    try {
+      const res = await fetch(`/api/customers/statement?customerId=${customer.id}`);
+      const json = await res.json();
+      setStatement(json);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setStatementLoading(false);
+    }
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     const payload = Object.fromEntries(formData);
-    
+
     try {
       if (editingItem) {
-        await fetch(`/api/customers/${editingItem.id}`, {
+        await fetch('/api/customers', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...payload, id: editingItem.id }),
         });
       } else {
         await fetch('/api/customers', {
@@ -74,29 +92,30 @@ export default function CustomersPage() {
   const columns = [
     { header: 'اسم العميل', accessor: 'name' },
     { header: 'رقم الهاتف', accessor: 'phone' },
-    { 
-      header: 'الرصيد', 
+    {
+      header: 'المديونية',
       accessor: 'balance',
       render: (row) => (
         <span style={{ fontWeight: 'bold', color: row.balance > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-          {row.balance} ﷼
+          {formatCurrency(row.balance)}
         </span>
-      )
+      ),
     },
-    { 
-      header: 'تاريخ الإضافة', 
+    {
+      header: 'تاريخ الإضافة',
       accessor: 'createdAt',
-      render: (row) => new Date(row.createdAt).toLocaleDateString('ar-EG')
+      render: (row) => new Date(row.createdAt).toLocaleDateString('ar-EG'),
     },
-    { 
-      header: 'إجراءات', 
+    {
+      header: 'إجراءات',
       render: (item) => (
         <div className="flex gap-2">
+          <button onClick={() => handleStatement(item)} className="text-green-600 hover:underline">كشف حساب</button>
           <button onClick={() => handleEdit(item)} className="text-blue-500 hover:underline">تعديل</button>
           <button onClick={() => handleDelete(item.id)} className="text-red-500 hover:underline">حذف</button>
         </div>
-      )
-    }
+      ),
+    },
   ];
 
   return (
@@ -104,13 +123,13 @@ export default function CustomersPage() {
       <div className="page-header animate-slide">
         <div>
           <h1 className="page-title">إدارة العملاء</h1>
-          <p className="page-subtitle">إضافة وتعديل ومتابعة بيانات العملاء وأرصدتهم</p>
+          <p className="page-subtitle">إضافة وتعديل ومتابعة بيانات العملاء ومديونياتهم</p>
         </div>
       </div>
 
-      <DataTable 
-        title="قائمة العملاء" 
-        columns={columns} 
+      <DataTable
+        title="قائمة العملاء"
+        columns={columns}
         data={data}
         actions={
           <button className="btn btn-primary" onClick={handleAdd}>
@@ -130,7 +149,7 @@ export default function CustomersPage() {
             <input name="phone" defaultValue={editingItem?.phone || ''} className="form-input" />
           </div>
           <div>
-            <label className="form-label">الرصيد الافتتاحي (﷼)</label>
+            <label className="form-label">الرصيد الافتتاحي (د.ع)</label>
             <input name="balance" type="number" step="0.01" defaultValue={editingItem?.balance || 0} className="form-input" />
           </div>
           <div className="flex justify-end gap-2 mt-4">
@@ -138,6 +157,73 @@ export default function CustomersPage() {
             <button type="submit" className="btn btn-primary">حفظ</button>
           </div>
         </form>
+      </Modal>
+
+      <Modal isOpen={statementOpen} onClose={() => setStatementOpen(false)} title="كشف حساب العميل" size="large">
+        {statementLoading ? (
+          <div className="loading-spinner"><div className="spinner"></div></div>
+        ) : statement ? (
+          <div className="space-y-4">
+            <div className="card" style={{ padding: '16px' }}>
+              <h3 style={{ marginBottom: '8px' }}>{statement.customer.name}</h3>
+              <p>المديونية الحالية: <strong>{formatCurrency(statement.summary.balance)}</strong></p>
+              <p>إجمالي المبيعات المرحّلة: {formatCurrency(statement.summary.totalSales)}</p>
+              <p>إجمالي التحصيلات المرحّلة: {formatCurrency(statement.summary.totalCollected)}</p>
+            </div>
+
+            <div>
+              <h4 style={{ marginBottom: '10px' }}>فواتير البيع</h4>
+              <table>
+                <thead>
+                  <tr>
+                    <th>الرقم</th>
+                    <th>التاريخ</th>
+                    <th>الإجمالي</th>
+                    <th>المدفوع</th>
+                    <th>المتبقي</th>
+                    <th>الترحيل</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statement.sales.map((sale) => (
+                    <tr key={sale.id}>
+                      <td>{sale.id}</td>
+                      <td>{sale.date}</td>
+                      <td>{formatCurrency(sale.total)}</td>
+                      <td>{formatCurrency(sale.paidAmount || sale.paidamount || 0)}</td>
+                      <td>{formatCurrency(sale.total - (sale.paidAmount || sale.paidamount || 0))}</td>
+                      <td>{(sale.postStatus || sale.poststatus) === 'posted' ? 'مرحّل' : 'معلق'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div>
+              <h4 style={{ marginBottom: '10px' }}>سندات القبض</h4>
+              <table>
+                <thead>
+                  <tr>
+                    <th>الرقم</th>
+                    <th>التاريخ</th>
+                    <th>المبلغ</th>
+                    <th>الترحيل</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statement.collections.map((col) => (
+                    <tr key={col.id}>
+                      <td>{col.id}</td>
+                      <td>{col.date}</td>
+                      <td>{formatCurrency(col.amount)}</td>
+                      <td>{(col.postStatus || col.poststatus) === 'posted' ? 'مرحّل' : 'معلق'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
       </Modal>
     </AuthGuard>
   );

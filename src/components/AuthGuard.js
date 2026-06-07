@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import Sidebar from './Sidebar';
+import AppShell from './AppShell';
 
 export default function AuthGuard({ children, allowedRoles = ['admin', 'accountant', 'rep'] }) {
   const router = useRouter();
@@ -60,11 +60,8 @@ export default function AuthGuard({ children, allowedRoles = ['admin', 'accounta
   }
 
   return (
-    <div className="app-layout">
-      {user && <Sidebar user={user} />}
-      <main className="main-content">
-        {children}
-      </main>
-    </div>
+    <AppShell user={user}>
+      {children}
+    </AppShell>
   );
 }

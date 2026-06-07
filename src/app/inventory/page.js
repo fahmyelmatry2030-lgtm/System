@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
+import { formatCurrency } from '@/lib/currency';
 
 export default function InventoryPage() {
   const [data, setData] = useState([]);
@@ -84,8 +85,8 @@ export default function InventoryPage() {
         </span>
       )
     },
-    { header: 'سعر الشراء', accessor: 'purchasePrice', render: (row) => `${row.purchasePrice} ﷼` },
-    { header: 'سعر البيع', accessor: 'sellPrice', render: (row) => `${row.sellPrice} ﷼` },
+    { header: 'سعر الشراء', accessor: 'purchasePrice', render: (row) => formatCurrency(row.purchasePrice) },
+    { header: 'سعر البيع', accessor: 'sellPrice', render: (row) => formatCurrency(row.sellPrice) },
     { 
       header: 'تاريخ الانتهاء', 
       accessor: 'expiryDate',
@@ -93,9 +94,12 @@ export default function InventoryPage() {
         if (!row.expiryDate) return '-';
         const today = new Date().toISOString().split('T')[0];
         const isExpired = row.expiryDate < today;
+        const warningDate = new Date();
+        warningDate.setDate(warningDate.getDate() + 30);
+        const isNearExpiry = !isExpired && row.expiryDate <= warningDate.toISOString().split('T')[0];
         return (
-          <span style={{ color: isExpired ? 'var(--danger)' : 'var(--text-muted)', fontWeight: isExpired ? 'bold' : 'normal' }}>
-            {row.expiryDate}
+          <span style={{ color: isExpired ? 'var(--danger)' : isNearExpiry ? 'var(--warning)' : 'var(--text-muted)', fontWeight: isExpired || isNearExpiry ? 'bold' : 'normal' }}>
+            {row.expiryDate}{isNearExpiry ? ' ⚠️' : ''}{isExpired ? ' (منتهي)' : ''}
           </span>
         );
       }
@@ -157,11 +161,11 @@ export default function InventoryPage() {
           </div>
           <div className="form-row">
             <div>
-              <label className="form-label">سعر الشراء (﷼)</label>
+              <label className="form-label">سعر الشراء (د.ع)</label>
               <input name="purchasePrice" type="number" step="0.01" defaultValue={editingItem?.purchasePrice || 0} required className="form-input" />
             </div>
             <div>
-              <label className="form-label">سعر البيع (﷼)</label>
+              <label className="form-label">سعر البيع (د.ع)</label>
               <input name="sellPrice" type="number" step="0.01" defaultValue={editingItem?.sellPrice || 0} required className="form-input" />
             </div>
           </div>

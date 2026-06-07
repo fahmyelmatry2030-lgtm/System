@@ -1,14 +1,16 @@
 import { query } from '@/lib/db';
 import { NextResponse } from 'next/server';
+import { getUserFromRequest, canModifyRecord, isPosted } from '@/lib/api-auth';
+import { applySaleEffects, reverseSaleEffects, resolveInitialPostStatus } from '@/lib/posting';
 
-export async function GET(request) {
+export async function GET() {
   try {
     const sales = (await query('SELECT * FROM sales ORDER BY createdAt DESC')).rows;
     const saleItems = (await query('SELECT * FROM sale_items')).rows;
-    
-    const salesWithItems = sales.map(s => ({
+
+    const salesWithItems = sales.map((s) => ({
       ...s,
-      items: saleItems.filter(i => i.saleid === s.id)
+      items: saleItems.filter((i) => i.saleid === s.id || i.saleId === s.id),
     }));
     return NextResponse.json({ sales: salesWithItems });
   } catch (error) {
@@ -19,19 +21,38 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const data = await request.json();
+    const user = getUserFromRequest(data);
     const { customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, items } = data;
     const id = 'INV-S' + Date.now();
-    
-    await query('INSERT INTO sales (id, customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName) VALUES (?,?,?,?,?,?,?,?,?)', [id, customerId, customerName, date, total || 0, paidAmount || 0, paymentStatus || 'unpaid', repId || null, repName || null]);
-    
+    const postStatus = resolveInitialPostStatus(user);
+
+    await query(
+      `INSERT INTO sales (id, customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, postStatus, createdBy, createdByName, postedBy, postedByName, postedAt)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        id, customerId, customerName, date, total || 0, paidAmount || 0, paymentStatus || 'unpaid',
+        repId || user?.id || null, repName || user?.fullName || null, postStatus,
+        user?.id || null, user?.fullName || null,
+        postStatus === 'posted' ? user?.id || null : null,
+        postStatus === 'posted' ? user?.fullName || null : null,
+        postStatus === 'posted' ? new Date().toISOString() : null,
+      ]
+    );
+
     if (items && Array.isArray(items)) {
       for (const item of items) {
-        await query('INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', [id, item.productId, item.productName, item.qty, item.price, item.qty * item.price]);
-        await query('UPDATE products SET qty = qty - ? WHERE id = ?', [item.qty, item.productId]);
+        await query(
+          'INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)',
+          [id, item.productId, item.productName, item.qty, item.price, item.qty * item.price]
+        );
       }
     }
-    
-    return NextResponse.json({ success: true, id });
+
+    if (postStatus === 'posted') {
+      await applySaleEffects(id);
+    }
+
+    return NextResponse.json({ success: true, id, postStatus });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -40,11 +61,21 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     const data = await request.json();
+    const user = getUserFromRequest(data);
     const { id, customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName } = data;
     if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
 
-    await query('UPDATE sales SET customerId=?, customerName=?, date=?, total=?, paidAmount=?, paymentStatus=?, repId=?, repName=? WHERE id=?', [customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, id]);
-    
+    const existing = (await query('SELECT * FROM sales WHERE id = ?', [id])).rows[0];
+    if (!existing) return NextResponse.json({ error: 'الفاتورة غير موجودة' }, { status: 404 });
+    if (!canModifyRecord(existing, user)) {
+      return NextResponse.json({ error: 'لا يمكن تعديل عملية مرحّلة إلا من قبل المدير' }, { status: 403 });
+    }
+
+    await query(
+      'UPDATE sales SET customerId=?, customerName=?, date=?, total=?, paidAmount=?, paymentStatus=?, repId=?, repName=? WHERE id=?',
+      [customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, id]
+    );
+
     return NextResponse.json({ success: true, id });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -54,15 +85,22 @@ export async function PUT(request) {
 export async function DELETE(request) {
   try {
     const id = request.nextUrl.searchParams.get('id');
+    const role = request.nextUrl.searchParams.get('role');
     if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
-    
-    const items = (await query('SELECT * FROM sale_items WHERE saleId=?', [id])).rows;
-    for (const item of items) {
-      await query('UPDATE products SET qty = qty + ? WHERE id = ?', [item.qty, item.productid]);
+
+    const existing = (await query('SELECT * FROM sales WHERE id = ?', [id])).rows[0];
+    if (!existing) return NextResponse.json({ error: 'الفاتورة غير موجودة' }, { status: 404 });
+    if (!canModifyRecord(existing, { role })) {
+      return NextResponse.json({ error: 'لا يمكن حذف عملية مرحّلة إلا من قبل المدير' }, { status: 403 });
     }
+
+    if (isPosted(existing)) {
+      await reverseSaleEffects(id);
+    }
+
     await query('DELETE FROM sale_items WHERE saleId=?', [id]);
     await query('DELETE FROM sales WHERE id=?', [id]);
-    
+
     return NextResponse.json({ success: true, id });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

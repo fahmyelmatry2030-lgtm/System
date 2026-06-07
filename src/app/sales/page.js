@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
+import PostStatusBadge from '@/components/PostStatusBadge';
+import PostActions from '@/components/PostActions';
+import { formatCurrency } from '@/lib/currency';
+import { withUser } from '@/lib/api-client';
 
 export default function SalesPage() {
   const [sales, setSales] = useState([]);
@@ -95,7 +99,7 @@ export default function SalesPage() {
       const res = await fetch('/api/sales', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(withUser({
           ...formData,
           customerName: customer ? customer.name : '',
           total: total - formData.discount,
@@ -111,7 +115,7 @@ export default function SalesPage() {
               total: parseFloat(item.price) * parseInt(item.qty)
             };
           })
-        })
+        }))
       });
       
       if (res.ok) {
@@ -134,7 +138,11 @@ export default function SalesPage() {
     { 
       header: 'الإجمالي', 
       accessor: 'total',
-      render: (row) => <span style={{fontWeight: 'bold'}}>{row.total} ﷼</span>
+      render: (row) => <span style={{fontWeight: 'bold'}}>{formatCurrency(row.total)}</span>
+    },
+    {
+      header: 'الترحيل',
+      render: (row) => <PostStatusBadge record={row} />,
     },
     { 
       header: 'الحالة', 
@@ -145,8 +153,12 @@ export default function SalesPage() {
         </span>
       )
     },
-    { header: 'المبلغ المدفوع', accessor: 'paidAmount', render: (row) => `${row.paidAmount} ﷼` },
-    { header: 'المتبقي', accessor: (row) => `${row.total - row.paidAmount} ﷼` }
+    { header: 'المبلغ المدفوع', accessor: 'paidAmount', render: (row) => formatCurrency(row.paidAmount) },
+    { header: 'المتبقي', accessor: (row) => formatCurrency(row.total - row.paidAmount) },
+    {
+      header: 'إجراءات',
+      render: (row) => <PostActions entity="sales" record={row} onPosted={fetchData} />,
+    },
   ];
 
   return (
@@ -202,7 +214,7 @@ export default function SalesPage() {
             >
               <option value="">-- اختر العميل --</option>
               {customers.map(c => (
-                <option key={c.id} value={c.id}>{c.name} (الرصيد: {c.balance} ﷼)</option>
+                <option key={c.id} value={c.id}>{c.name} (الرصيد: {formatCurrency(c.balance)})</option>
               ))}
             </select>
           </div>
@@ -247,7 +259,7 @@ export default function SalesPage() {
                     <option value="">-- اختر المنتج --</option>
                     {products.map(p => (
                       <option key={p.id} value={p.id} disabled={p.qty <= 0}>
-                        {p.name} - {p.sellPrice} ﷼ {p.qty <= 0 ? '(نفد)' : `(متوفر: ${p.qty})`}
+                        {p.name} - {formatCurrency(p.sellPrice)} {p.qty <= 0 ? '(نفد)' : `(متوفر: ${p.qty})`}
                       </option>
                     ))}
                   </select>
@@ -286,7 +298,7 @@ export default function SalesPage() {
 
           <div className="form-row" style={{ marginTop: '20px' }}>
             <div className="form-group">
-              <label className="form-label">الخصم (﷼)</label>
+              <label className="form-label">الخصم (د.ع)</label>
               <input 
                 type="number" 
                 step="0.01"
@@ -297,7 +309,7 @@ export default function SalesPage() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">المبلغ المدفوع (﷼)</label>
+              <label className="form-label">المبلغ المدفوع (د.ع)</label>
               <input 
                 type="number" 
                 step="0.01"
@@ -312,15 +324,15 @@ export default function SalesPage() {
           <div style={{ marginTop: '20px', padding: '15px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
               <span>المجموع:</span>
-              <span style={{ fontWeight: 'bold' }}>{calculateTotal()} ﷼</span>
+              <span style={{ fontWeight: 'bold' }}>{formatCurrency(calculateTotal())}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
               <span>الخصم:</span>
-              <span style={{ color: 'var(--danger)' }}>-{formData.discount} ﷼</span>
+              <span style={{ color: 'var(--danger)' }}>-{formatCurrency(formData.discount)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', fontWeight: 'bold', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
               <span>الإجمالي النهائي:</span>
-              <span style={{ color: 'var(--primary)' }}>{calculateTotal() - formData.discount} ﷼</span>
+              <span style={{ color: 'var(--primary)' }}>{formatCurrency(calculateTotal() - formData.discount)}</span>
             </div>
           </div>
           

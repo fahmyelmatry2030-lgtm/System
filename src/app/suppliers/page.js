@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
+import { formatCurrency } from '@/lib/currency';
 
 export default function SuppliersPage() {
   const [data, setData] = useState([]);
@@ -80,7 +81,7 @@ export default function SuppliersPage() {
       accessor: 'balance',
       render: (row) => (
         <span style={{ fontWeight: 'bold', color: row.balance > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-          {row.balance} ﷼
+          {formatCurrency(row.balance)}
         </span>
       )
     },
@@ -135,7 +136,7 @@ export default function SuppliersPage() {
             <input name="email" type="email" defaultValue={editingItem?.email || ''} className="form-input" />
           </div>
           <div>
-            <label className="form-label">الرصيد الافتتاحي (﷼)</label>
+            <label className="form-label">الرصيد الافتتاحي (د.ع)</label>
             <input name="balance" type="number" step="0.01" defaultValue={editingItem?.balance || 0} className="form-input" />
           </div>
           <div className="flex justify-end gap-2 mt-4">

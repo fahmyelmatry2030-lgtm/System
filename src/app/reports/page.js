@@ -3,12 +3,48 @@
 import { useState, useEffect } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import StatsCard from '@/components/StatsCard';
+import { formatCurrency } from '@/lib/currency';
+import { getStoredUser } from '@/lib/api-client';
 
 export default function Reports() {
   const [reportType, setReportType] = useState('financial'); // financial, inventory, debt, sales, purchases, stocktake, damaged, collections
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
+  const [user, setUser] = useState(null);
+  const [backupLoading, setBackupLoading] = useState(false);
+
+  useEffect(() => {
+    setUser(getStoredUser());
+  }, []);
+
+  const handleBackup = async () => {
+    if (!user || !['admin', 'accountant'].includes(user.role)) {
+      alert('هذه العملية متاحة للمدير والمحاسب فقط');
+      return;
+    }
+    setBackupLoading(true);
+    try {
+      const res = await fetch(`/api/backup?role=${user.role}`);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'فشل التنزيل');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `erp-backup-${new Date().toISOString().slice(0, 10)}.sqlite`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
 
   const fetchReport = async (type) => {
     setLoading(true);
@@ -37,16 +73,16 @@ export default function Reports() {
       <div className="animate-slide">
         <h2 style={{ marginBottom: '20px', color: 'var(--text-heading)' }}>ملخص مالي شامل (الأرباح والخسائر)</h2>
         <div className="stats-grid">
-          <StatsCard title="إجمالي المبيعات" value={`${data.totalSales || 0} ﷼`} color="indigo" />
-          <StatsCard title="إجمالي المشتريات" value={`${data.totalPurchases || 0} ﷼`} color="orange" />
-          <StatsCard title="المصروفات" value={`${data.totalExpenses || 0} ﷼`} color="red" />
-          <StatsCard title="خسائر التوالف" value={`${data.totalDamaged || 0} ﷼`} color="red" />
+          <StatsCard title="إجمالي المبيعات" value={formatCurrency(data.totalSales || 0)} color="indigo" />
+          <StatsCard title="إجمالي المشتريات" value={formatCurrency(data.totalPurchases || 0)} color="orange" />
+          <StatsCard title="المصروفات" value={formatCurrency(data.totalExpenses || 0)} color="red" />
+          <StatsCard title="خسائر التوالف" value={formatCurrency(data.totalDamaged || 0)} color="red" />
         </div>
         
         <div className="card" style={{ marginTop: '20px', textAlign: 'center', padding: '40px' }}>
           <h3 style={{ color: 'var(--text-muted)', marginBottom: '10px' }}>صافي الربح التقديري (قبل الضريبة)</h3>
           <div style={{ fontSize: '3rem', fontWeight: '800', color: data.netProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-            {data.netProfit >= 0 ? '+' : ''}{data.netProfit || 0} ﷼
+            {data.netProfit >= 0 ? '+' : ''}{formatCurrency(data.netProfit || 0)}
           </div>
           <p style={{ marginTop: '10px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             معادلة الحساب: (المبيعات - المشتريات - المصروفات - خسائر التوالف)
@@ -63,7 +99,7 @@ export default function Reports() {
         <h2 style={{ marginBottom: '20px', color: 'var(--text-heading)' }}>تقارير المخزون</h2>
         <div className="grid-2" style={{ marginBottom: '24px' }}>
           <StatsCard title="إجمالي الأصناف المسجلة" value={data.products?.count || 0} color="blue" />
-          <StatsCard title="قيمة المخزون المقدرة (بالتكلفة)" value={`${data.products?.value || 0} ﷼`} color="indigo" />
+          <StatsCard title="قيمة المخزون المقدرة (بالتكلفة)" value={formatCurrency(data.products?.value || 0)} color="indigo" />
         </div>
         
         <div className="card">
@@ -120,7 +156,7 @@ export default function Reports() {
                   {data.customers.map((c, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
                       <td style={{ padding: '10px 0' }}>{c.name}</td>
-                      <td style={{ padding: '10px 0', color: 'var(--success)', fontWeight: 'bold' }}>{c.balance} ﷼</td>
+                      <td style={{ padding: '10px 0', color: 'var(--success)', fontWeight: 'bold' }}>{formatCurrency(c.balance)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -144,7 +180,7 @@ export default function Reports() {
                   {data.suppliers.map((s, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
                       <td style={{ padding: '10px 0' }}>{s.name}</td>
-                      <td style={{ padding: '10px 0', color: 'var(--danger)', fontWeight: 'bold' }}>{s.balance} ﷼</td>
+                      <td style={{ padding: '10px 0', color: 'var(--danger)', fontWeight: 'bold' }}>{formatCurrency(s.balance)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -193,9 +229,9 @@ export default function Reports() {
 
         <div className="stats-grid">
           <StatsCard title="عدد الفواتير" value={data.sales?.length || 0} color="blue" />
-          <StatsCard title="إجمالي المبيعات" value={`${data.totalSales || 0} ﷼`} color="indigo" />
-          <StatsCard title="المبالغ المدفوعة" value={`${data.totalPaid || 0} ﷼`} color="green" />
-          <StatsCard title="المبالغ المتبقية" value={`${data.totalRemaining || 0} ﷼`} color="orange" />
+          <StatsCard title="إجمالي المبيعات" value={formatCurrency(data.totalSales || 0)} color="indigo" />
+          <StatsCard title="المبالغ المدفوعة" value={formatCurrency(data.totalPaid || 0)} color="green" />
+          <StatsCard title="المبالغ المتبقية" value={formatCurrency(data.totalRemaining || 0)} color="orange" />
         </div>
 
         <div className="card" style={{ marginTop: '20px' }}>
@@ -214,7 +250,7 @@ export default function Reports() {
                   <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
                     <td style={{ padding: '10px 0' }}>{rep.repName || 'غير محدد'}</td>
                     <td style={{ padding: '10px 0' }}>{rep.count}</td>
-                    <td style={{ padding: '10px 0', fontWeight: 'bold' }}>{rep.total} ﷼</td>
+                    <td style={{ padding: '10px 0', fontWeight: 'bold' }}>{formatCurrency(rep.total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -235,9 +271,9 @@ export default function Reports() {
         
         <div className="stats-grid">
           <StatsCard title="عدد الفواتير" value={data.purchases?.length || 0} color="blue" />
-          <StatsCard title="إجمالي المشتريات" value={`${data.totalPurchases || 0} ﷼`} color="orange" />
-          <StatsCard title="المبالغ المدفوعة" value={`${data.totalPaid || 0} ﷼`} color="green" />
-          <StatsCard title="المبالغ المتبقية" value={`${data.totalRemaining || 0} ﷼`} color="red" />
+          <StatsCard title="إجمالي المشتريات" value={formatCurrency(data.totalPurchases || 0)} color="orange" />
+          <StatsCard title="المبالغ المدفوعة" value={formatCurrency(data.totalPaid || 0)} color="green" />
+          <StatsCard title="المبالغ المتبقية" value={formatCurrency(data.totalRemaining || 0)} color="red" />
         </div>
 
         <div className="card" style={{ marginTop: '20px' }}>
@@ -256,7 +292,7 @@ export default function Reports() {
                   <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
                     <td style={{ padding: '10px 0' }}>{sup.supplierName}</td>
                     <td style={{ padding: '10px 0' }}>{sup.count}</td>
-                    <td style={{ padding: '10px 0', fontWeight: 'bold' }}>{sup.total} ﷼</td>
+                    <td style={{ padding: '10px 0', fontWeight: 'bold' }}>{formatCurrency(sup.total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -277,8 +313,8 @@ export default function Reports() {
         
         <div className="stats-grid">
           <StatsCard title="عدد عمليات الجرد" value={data.stocktakes?.length || 0} color="blue" />
-          <StatsCard title="فائض" value={`${data.surplus || 0} ﷼`} color="green" />
-          <StatsCard title="عجز" value={`${data.deficit || 0} ﷼`} color="red" />
+          <StatsCard title="فائض" value={formatCurrency(data.surplus || 0)} color="green" />
+          <StatsCard title="عجز" value={formatCurrency(data.deficit || 0)} color="red" />
         </div>
 
         <div className="card" style={{ marginTop: '20px' }}>
@@ -328,7 +364,7 @@ export default function Reports() {
         
         <div className="stats-grid">
           <StatsCard title="عدد الحوادث" value={data.damaged?.length || 0} color="red" />
-          <StatsCard title="إجمالي الخسائر" value={`${data.totalLoss || 0} ﷼`} color="orange" />
+          <StatsCard title="إجمالي الخسائر" value={formatCurrency(data.totalLoss || 0)} color="orange" />
         </div>
 
         <div className="card" style={{ marginTop: '20px' }}>
@@ -353,7 +389,7 @@ export default function Reports() {
                     <td style={{ padding: '10px 0' }}>{d.qty}</td>
                     <td style={{ padding: '10px 0' }}>{d.type}</td>
                     <td style={{ padding: '10px 0' }}>{d.reason}</td>
-                    <td style={{ padding: '10px 0', color: 'var(--danger)', fontWeight: 'bold' }}>{d.value} ﷼</td>
+                    <td style={{ padding: '10px 0', color: 'var(--danger)', fontWeight: 'bold' }}>{formatCurrency(d.value)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -400,8 +436,8 @@ export default function Reports() {
         
         <div className="stats-grid">
           <StatsCard title="عدد سندات القبض" value={data.collections?.length || 0} color="blue" />
-          <StatsCard title="إجمالي المحصل" value={`${data.totalCollected || 0} ﷼`} color="green" />
-          <StatsCard title="إجمالي الديون المستحقة" value={`${data.totalDebt || 0} ﷼`} color="orange" />
+          <StatsCard title="إجمالي المحصل" value={formatCurrency(data.totalCollected || 0)} color="green" />
+          <StatsCard title="إجمالي الديون المستحقة" value={formatCurrency(data.totalDebt || 0)} color="orange" />
         </div>
 
         <div className="card" style={{ marginTop: '20px' }}>
@@ -422,7 +458,7 @@ export default function Reports() {
                   <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
                     <td style={{ padding: '10px 0' }}>{c.date}</td>
                     <td style={{ padding: '10px 0' }}>{c.customerName}</td>
-                    <td style={{ padding: '10px 0', fontWeight: 'bold' }}>{c.amount} ﷼</td>
+                    <td style={{ padding: '10px 0', fontWeight: 'bold' }}>{formatCurrency(c.amount)}</td>
                     <td style={{ padding: '10px 0' }}>{c.method === 'cash' ? 'نقدي' : c.method === 'transfer' ? 'حوالة' : 'شيك'}</td>
                     <td style={{ padding: '10px 0' }}>{c.repName || '-'}</td>
                   </tr>
@@ -444,6 +480,11 @@ export default function Reports() {
           <h1 className="page-title">مركز التقارير</h1>
           <p className="page-subtitle">تقارير مالية ومخزنية مفصلة لمتخذي القرار</p>
         </div>
+        {user && ['admin', 'accountant'].includes(user.role) && (
+          <button className="btn btn-secondary" onClick={handleBackup} disabled={backupLoading}>
+            {backupLoading ? 'جاري التنزيل...' : 'تنزيل نسخة احتياطية من قاعدة البيانات'}
+          </button>
+        )}
       </div>
 
       <div className="tabs animate-slide" style={{ animationDelay: '0.1s' }}>

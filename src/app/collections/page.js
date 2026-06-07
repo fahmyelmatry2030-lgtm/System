@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
+import PostStatusBadge from '@/components/PostStatusBadge';
+import PostActions from '@/components/PostActions';
+import { formatCurrency } from '@/lib/currency';
+import { withUser } from '@/lib/api-client';
 
 export default function Collections() {
   const [collections, setCollections] = useState([]);
@@ -58,13 +62,13 @@ export default function Collections() {
       const res = await fetch('/api/collections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(withUser({
           ...formData,
           amount: parseFloat(formData.amount),
           customerName: customer ? customer.name : '',
           repId: user?.id,
           repName: user?.fullName
-        })
+        }))
       });
       
       if (res.ok) {
@@ -80,7 +84,8 @@ export default function Collections() {
     { header: 'الرقم', accessor: 'id' },
     { header: 'التاريخ', accessor: 'date' },
     { header: 'العميل', accessor: 'customerName' },
-    { header: 'المبلغ', accessor: 'amount', render: (row) => <span style={{fontWeight: 'bold', color: 'var(--success)'}}>{row.amount} ﷼</span> },
+    { header: 'المبلغ', accessor: 'amount', render: (row) => <span style={{fontWeight: 'bold', color: 'var(--success)'}}>{formatCurrency(row.amount)}</span> },
+    { header: 'الترحيل', render: (row) => <PostStatusBadge record={row} /> },
     { 
       header: 'طريقة الدفع', 
       accessor: 'method',
@@ -91,7 +96,8 @@ export default function Collections() {
       )
     },
     { header: 'المندوب', accessor: 'repName' },
-    { header: 'ملاحظات', accessor: 'notes' }
+    { header: 'ملاحظات', accessor: 'notes' },
+    { header: 'إجراءات', render: (row) => <PostActions entity="collections" record={row} onPosted={fetchData} /> },
   ];
 
   return (
@@ -144,14 +150,14 @@ export default function Collections() {
             >
               <option value="">-- اختر العميل --</option>
               {customers.map(c => (
-                <option key={c.id} value={c.id}>{c.name} (رصيد المديونية: {c.balance} ﷼)</option>
+                <option key={c.id} value={c.id}>{c.name} (رصيد المديونية: {formatCurrency(c.balance)})</option>
               ))}
             </select>
           </div>
           
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">المبلغ المحصل (﷼)</label>
+              <label className="form-label">المبلغ المحصل (د.ع)</label>
               <input 
                 type="number" 
                 step="0.01"

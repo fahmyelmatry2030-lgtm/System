@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
+import PostStatusBadge from '@/components/PostStatusBadge';
+import PostActions from '@/components/PostActions';
+import { formatCurrency } from '@/lib/currency';
+import { withUser } from '@/lib/api-client';
 
 export default function PurchasesPage() {
   const [purchases, setPurchases] = useState([]);
@@ -89,7 +93,7 @@ export default function PurchasesPage() {
       const res = await fetch('/api/purchases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(withUser({
           ...formData,
           supplierName: supplier ? supplier.name : '',
           total,
@@ -103,7 +107,7 @@ export default function PurchasesPage() {
               total: parseFloat(item.price) * parseInt(item.qty)
             };
           })
-        })
+        }))
       });
       
       if (res.ok) {
@@ -125,11 +129,13 @@ export default function PurchasesPage() {
     { 
       header: 'الإجمالي', 
       accessor: 'total',
-      render: (row) => <span style={{fontWeight: 'bold'}}>{row.total} ﷼</span>
+      render: (row) => <span style={{fontWeight: 'bold'}}>{formatCurrency(row.total)}</span>
     },
-    { header: 'المدفوع', accessor: 'paidAmount', render: (row) => `${row.paidAmount} ﷼` },
-    { header: 'المتبقي', accessor: (row) => `${row.total - row.paidAmount} ﷼` },
-    { header: 'ملاحظات', accessor: 'notes' }
+    { header: 'الترحيل', render: (row) => <PostStatusBadge record={row} /> },
+    { header: 'المدفوع', accessor: 'paidAmount', render: (row) => formatCurrency(row.paidAmount) },
+    { header: 'المتبقي', accessor: (row) => formatCurrency(row.total - row.paidAmount) },
+    { header: 'ملاحظات', accessor: 'notes' },
+    { header: 'إجراءات', render: (row) => <PostActions entity="purchases" record={row} onPosted={fetchData} /> },
   ];
 
   return (
@@ -183,7 +189,7 @@ export default function PurchasesPage() {
             >
               <option value="">-- اختر المورد --</option>
               {suppliers.map(s => (
-                <option key={s.id} value={s.id}>{s.name} (الرصيد: {s.balance} ﷼)</option>
+                <option key={s.id} value={s.id}>{s.name} (الرصيد: {formatCurrency(s.balance)})</option>
               ))}
             </select>
           </div>
@@ -214,7 +220,7 @@ export default function PurchasesPage() {
                     <option value="">-- اختر المنتج --</option>
                     {products.map(p => (
                       <option key={p.id} value={p.id}>
-                        {p.name} - {p.purchasePrice} ﷼
+                        {p.name} - {formatCurrency(p.purchasePrice)}
                       </option>
                     ))}
                   </select>
@@ -252,7 +258,7 @@ export default function PurchasesPage() {
           </div>
 
           <div className="form-group" style={{ marginTop: '20px' }}>
-            <label className="form-label">المبلغ المدفوع (﷼)</label>
+            <label className="form-label">المبلغ المدفوع (د.ع)</label>
             <input 
               type="number" 
               step="0.01"
@@ -266,7 +272,7 @@ export default function PurchasesPage() {
           <div style={{ marginTop: '20px', padding: '15px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', fontWeight: 'bold', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
               <span>الإجمالي النهائي:</span>
-              <span style={{ color: 'var(--primary)' }}>{calculateTotal()} ﷼</span>
+              <span style={{ color: 'var(--primary)' }}>{formatCurrency(calculateTotal())}</span>
             </div>
           </div>
           
