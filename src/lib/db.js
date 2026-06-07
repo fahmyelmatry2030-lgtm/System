@@ -1,15 +1,29 @@
 import { Pool } from 'pg';
 import path from 'path';
 
-const usePostgres = !!(process.env.DATABASE_URL || process.env.POSTGRES_URL);
+function cleanConnectionString(url = '') {
+  return url
+    .replace(/[&?]channel_binding=[^&]*/gi, '')
+    .replace(/\?&/, '?')
+    .replace(/&&/g, '&')
+    .replace(/\?$/, '');
+}
+
+const connectionString = cleanConnectionString(process.env.DATABASE_URL || process.env.POSTGRES_URL || '');
+const usePostgres = !!connectionString;
 
 let pool = null;
 let sqliteDb = null;
+let dbReady = false;
+let dbInitPromise = null;
 
 if (usePostgres) {
   pool = new Pool({
-    connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    connectionString,
+    ssl: { rejectUnauthorized: false },
+    max: 5,
+    idleTimeoutMillis: 10000,
+    connectionTimeoutMillis: 10000,
   });
 } else {
   const Database = (await import('better-sqlite3')).default;
@@ -34,21 +48,38 @@ function toPgSql(sql) {
   return sql.replace(/\?/g, () => `$${i++}`);
 }
 
+async function executeQuery(sqlString, params = []) {
+  if (usePostgres) {
+    const result = await pool.query(toPgSql(sqlString), params);
+    return { rows: result.rows, rowCount: result.rowCount };
+  }
+
+  const stmt = sqliteDb.prepare(sqlString);
+  const isSelect = sqlString.trim().toUpperCase().startsWith('SELECT');
+  if (isSelect) {
+    const rows = stmt.all(...params);
+    return { rows, rowCount: rows.length };
+  }
+  const result = stmt.run(...params);
+  return { rows: [], rowCount: result.changes, rowsAffected: result.changes, lastInsertRowid: result.lastInsertRowid };
+}
+
+export async function ensureDb() {
+  if (dbReady) return;
+  if (!dbInitPromise) {
+    dbInitPromise = bootstrap().catch((error) => {
+      dbInitPromise = null;
+      console.error('Database bootstrap failed:', error);
+      throw error;
+    });
+  }
+  await dbInitPromise;
+}
+
 export async function query(sqlString, params = []) {
   try {
-    if (usePostgres) {
-      const result = await pool.query(toPgSql(sqlString), params);
-      return { rows: result.rows, rowCount: result.rowCount };
-    }
-
-    const stmt = sqliteDb.prepare(sqlString);
-    const isSelect = sqlString.trim().toUpperCase().startsWith('SELECT');
-    if (isSelect) {
-      const rows = stmt.all(...params);
-      return { rows, rowCount: rows.length };
-    }
-    const result = stmt.run(...params);
-    return { rows: [], rowCount: result.changes, rowsAffected: result.changes, lastInsertRowid: result.lastInsertRowid };
+    await ensureDb();
+    return await executeQuery(sqlString, params);
   } catch (error) {
     console.error('Database Query Error:', error);
     throw error;
@@ -69,7 +100,7 @@ async function migratePostingSchema() {
     for (const col of POSTING_COLUMN_DEFS) {
       try {
         if (usePostgres) {
-          await query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${col.name} ${col.pg}`);
+          await executeQuery(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${col.name} ${col.pg}`);
         } else {
           const columns = sqliteDb.prepare(`PRAGMA table_info(${table})`).all();
           if (!columns.some((c) => c.name === col.name)) {
@@ -82,8 +113,15 @@ async function migratePostingSchema() {
         }
       }
     }
-    await query(`UPDATE ${table} SET postStatus = 'posted' WHERE postStatus IS NULL OR postStatus = ''`);
+    await executeQuery(`UPDATE ${table} SET postStatus = 'posted' WHERE postStatus IS NULL OR postStatus = ''`);
   }
+}
+
+async function bootstrap() {
+  await initTables();
+  await migratePostingSchema();
+  await seedIfEmpty();
+  dbReady = true;
 }
 
 const POSTGRES_SCHEMA = `
@@ -362,23 +400,28 @@ const SQLITE_TABLES = [
 
 export async function initTables() {
   if (usePostgres) {
-    await pool.query(POSTGRES_SCHEMA);
+    const statements = POSTGRES_SCHEMA.split(';')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const sql of statements) {
+      await pool.query(sql);
+    }
   } else {
     for (const table of SQLITE_TABLES) {
-      await run(table);
+      await executeQuery(table);
     }
   }
 }
 
 export async function seedIfEmpty() {
-  const result = await query('SELECT COUNT(*) as c FROM products');
+  const result = await executeQuery('SELECT COUNT(*) as c FROM products');
   const count = parseInt(result.rows[0]?.c || '0', 10);
   if (count > 0) return;
 
-  await query('INSERT INTO users (id, username, password, fullName, role) VALUES (?,?,?,?,?)', ['U001', 'admin', 'admin123', 'مدير النظام', 'admin']);
-  await query('INSERT INTO users (id, username, password, fullName, role) VALUES (?,?,?,?,?)', ['U002', 'accountant', 'acc123', 'أحمد المحاسب', 'accountant']);
-  await query('INSERT INTO users (id, username, password, fullName, role) VALUES (?,?,?,?,?)', ['U003', 'rep_ahmed', 'rep123', 'أحمد المندوب', 'rep']);
-  await query('INSERT INTO users (id, username, password, fullName, role) VALUES (?,?,?,?,?)', ['U004', 'rep_sara', 'rep123', 'سارة المندوبة', 'rep']);
+  await executeQuery('INSERT INTO users (id, username, password, fullName, role) VALUES (?,?,?,?,?)', ['U001', 'admin', 'admin123', 'مدير النظام', 'admin']);
+  await executeQuery('INSERT INTO users (id, username, password, fullName, role) VALUES (?,?,?,?,?)', ['U002', 'accountant', 'acc123', 'أحمد المحاسب', 'accountant']);
+  await executeQuery('INSERT INTO users (id, username, password, fullName, role) VALUES (?,?,?,?,?)', ['U003', 'rep_ahmed', 'rep123', 'أحمد المندوب', 'rep']);
+  await executeQuery('INSERT INTO users (id, username, password, fullName, role) VALUES (?,?,?,?,?)', ['U004', 'rep_sara', 'rep123', 'سارة المندوبة', 'rep']);
 
   const products = [
     ['P101','أرز بسمتي فاخر 5كجم','SKU-RICE-01','غذائية',45,40,55,'2026-08-15',10],
@@ -393,61 +436,57 @@ export async function seedIfEmpty() {
     ['P110','سكر أبيض 1 كجم','SKU-SUGAR-10','غذائية',90,3,4.5,'2027-01-15',25],
   ];
   for (const p of products) {
-    await query('INSERT INTO products (id, name, sku, category, qty, purchasePrice, sellPrice, expiryDate, threshold) VALUES (?,?,?,?,?,?,?,?,?)', p);
+    await executeQuery('INSERT INTO products (id, name, sku, category, qty, purchasePrice, sellPrice, expiryDate, threshold) VALUES (?,?,?,?,?,?,?,?,?)', p);
   }
 
-  await query('INSERT INTO suppliers (id, name, phone, email, balance) VALUES (?,?,?,?,?)', ['S201','شركة البركة للمواد الغذائية','0501112223','info@baraka.com',1200]);
-  await query('INSERT INTO suppliers (id, name, phone, email, balance) VALUES (?,?,?,?,?)', ['S202','مصانع الألبان المتحدة','0504445556','sales@uniteddairy.com',0]);
-  await query('INSERT INTO suppliers (id, name, phone, email, balance) VALUES (?,?,?,?,?)', ['S203','شركة المنظفات الوطنية','0506667778','clean@nat.com',500]);
-  await query('INSERT INTO suppliers (id, name, phone, email, balance) VALUES (?,?,?,?,?)', ['S204','مؤسسة المشروبات الطازجة','0508889990','fresh@drinks.com',300]);
+  await executeQuery('INSERT INTO suppliers (id, name, phone, email, balance) VALUES (?,?,?,?,?)', ['S201','شركة البركة للمواد الغذائية','0501112223','info@baraka.com',1200]);
+  await executeQuery('INSERT INTO suppliers (id, name, phone, email, balance) VALUES (?,?,?,?,?)', ['S202','مصانع الألبان المتحدة','0504445556','sales@uniteddairy.com',0]);
+  await executeQuery('INSERT INTO suppliers (id, name, phone, email, balance) VALUES (?,?,?,?,?)', ['S203','شركة المنظفات الوطنية','0506667778','clean@nat.com',500]);
+  await executeQuery('INSERT INTO suppliers (id, name, phone, email, balance) VALUES (?,?,?,?,?)', ['S204','مؤسسة المشروبات الطازجة','0508889990','fresh@drinks.com',300]);
 
-  await query('INSERT INTO customers (id, name, phone, balance) VALUES (?,?,?,?)', ['C301','سوبرماركت النجمة','0507778889',450]);
-  await query('INSERT INTO customers (id, name, phone, balance) VALUES (?,?,?,?)', ['C302','أسواق المدينة الاستهلاكية','0509990001',1100]);
-  await query('INSERT INTO customers (id, name, phone, balance) VALUES (?,?,?,?)', ['C303','بقالة الأمانة','0501234567',0]);
-  await query('INSERT INTO customers (id, name, phone, balance) VALUES (?,?,?,?)', ['C304','ميني ماركت الحي','0502345678',250]);
+  await executeQuery('INSERT INTO customers (id, name, phone, balance) VALUES (?,?,?,?)', ['C301','سوبرماركت النجمة','0507778889',450]);
+  await executeQuery('INSERT INTO customers (id, name, phone, balance) VALUES (?,?,?,?)', ['C302','أسواق المدينة الاستهلاكية','0509990001',1100]);
+  await executeQuery('INSERT INTO customers (id, name, phone, balance) VALUES (?,?,?,?)', ['C303','بقالة الأمانة','0501234567',0]);
+  await executeQuery('INSERT INTO customers (id, name, phone, balance) VALUES (?,?,?,?)', ['C304','ميني ماركت الحي','0502345678',250]);
 
-  await query("INSERT INTO purchases (id, supplierId, supplierName, date, total, paidAmount, postStatus) VALUES (?,?,?,?,?,?,?)", ['INV-P001','S201','شركة البركة للمواد الغذائية','2026-05-15',2000,800,'posted']);
-  await query('INSERT INTO purchase_items (purchaseId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-P001','P101','أرز بسمتي فاخر 5كجم',50,40,2000]);
-  await query("INSERT INTO purchases (id, supplierId, supplierName, date, total, paidAmount, postStatus) VALUES (?,?,?,?,?,?,?)", ['INV-P002','S202','مصانع الألبان المتحدة','2026-05-20',500,500,'posted']);
-  await query('INSERT INTO purchase_items (purchaseId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-P002','P103','حليب كامل الدسم 1 لتر',100,4,400]);
-  await query('INSERT INTO purchase_items (purchaseId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-P002','P105','جبنة شيدر قالب 1 كجم',4,25,100]);
+  await executeQuery("INSERT INTO purchases (id, supplierId, supplierName, date, total, paidAmount, postStatus) VALUES (?,?,?,?,?,?,?)", ['INV-P001','S201','شركة البركة للمواد الغذائية','2026-05-15',2000,800,'posted']);
+  await executeQuery('INSERT INTO purchase_items (purchaseId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-P001','P101','أرز بسمتي فاخر 5كجم',50,40,2000]);
+  await executeQuery("INSERT INTO purchases (id, supplierId, supplierName, date, total, paidAmount, postStatus) VALUES (?,?,?,?,?,?,?)", ['INV-P002','S202','مصانع الألبان المتحدة','2026-05-20',500,500,'posted']);
+  await executeQuery('INSERT INTO purchase_items (purchaseId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-P002','P103','حليب كامل الدسم 1 لتر',100,4,400]);
+  await executeQuery('INSERT INTO purchase_items (purchaseId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-P002','P105','جبنة شيدر قالب 1 كجم',4,25,100]);
 
-  await query("INSERT INTO sales (id, customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, postStatus) VALUES (?,?,?,?,?,?,?,?,?,?)", ['INV-S001','C301','سوبرماركت النجمة','2026-06-01',495,495,'paid','U003','أحمد المندوب','posted']);
-  await query('INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-S001','P101','أرز بسمتي فاخر 5كجم',5,55,275]);
-  await query('INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-S001','P102','زيت دوار الشمس 1.5 لتر',10,22,220]);
-  await query("INSERT INTO sales (id, customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, postStatus) VALUES (?,?,?,?,?,?,?,?,?,?)", ['INV-S002','C302','أسواق المدينة الاستهلاكية','2026-06-03',100,0,'unpaid','U004','سارة المندوبة','posted']);
-  await query('INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-S002','P104','مكرونة إيطالية 500 جرام',20,5,100]);
-  await query("INSERT INTO sales (id, customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, postStatus) VALUES (?,?,?,?,?,?,?,?,?,?)", ['INV-S003','C304','ميني ماركت الحي','2026-06-04',250,0,'unpaid','U003','أحمد المندوب','posted']);
-  await query('INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-S003','P109','شاي أخضر 100 كيس',10,12,120]);
-  await query('INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-S003','P110','سكر أبيض 1 كجم',20,4.5,90]);
-  await query('INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-S003','P108','معجون طماطم 400 جرام',10,4,40]);
+  await executeQuery("INSERT INTO sales (id, customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, postStatus) VALUES (?,?,?,?,?,?,?,?,?,?)", ['INV-S001','C301','سوبرماركت النجمة','2026-06-01',495,495,'paid','U003','أحمد المندوب','posted']);
+  await executeQuery('INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-S001','P101','أرز بسمتي فاخر 5كجم',5,55,275]);
+  await executeQuery('INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-S001','P102','زيت دوار الشمس 1.5 لتر',10,22,220]);
+  await executeQuery("INSERT INTO sales (id, customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, postStatus) VALUES (?,?,?,?,?,?,?,?,?,?)", ['INV-S002','C302','أسواق المدينة الاستهلاكية','2026-06-03',100,0,'unpaid','U004','سارة المندوبة','posted']);
+  await executeQuery('INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-S002','P104','مكرونة إيطالية 500 جرام',20,5,100]);
+  await executeQuery("INSERT INTO sales (id, customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, postStatus) VALUES (?,?,?,?,?,?,?,?,?,?)", ['INV-S003','C304','ميني ماركت الحي','2026-06-04',250,0,'unpaid','U003','أحمد المندوب','posted']);
+  await executeQuery('INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-S003','P109','شاي أخضر 100 كيس',10,12,120]);
+  await executeQuery('INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-S003','P110','سكر أبيض 1 كجم',20,4.5,90]);
+  await executeQuery('INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['INV-S003','P108','معجون طماطم 400 جرام',10,4,40]);
 
-  await query("INSERT INTO returns (id, type, entityId, entityName, date, reason, total, postStatus) VALUES (?,?,?,?,?,?,?,?)", ['RET-001','supplier','S201','شركة البركة للمواد الغذائية','2026-05-18','أكياس ممزقة',80,'posted']);
-  await query('INSERT INTO return_items (returnId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['RET-001','P101','أرز بسمتي فاخر 5كجم',2,40,80]);
+  await executeQuery("INSERT INTO returns (id, type, entityId, entityName, date, reason, total, postStatus) VALUES (?,?,?,?,?,?,?,?)", ['RET-001','supplier','S201','شركة البركة للمواد الغذائية','2026-05-18','أكياس ممزقة',80,'posted']);
+  await executeQuery('INSERT INTO return_items (returnId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)', ['RET-001','P101','أرز بسمتي فاخر 5كجم',2,40,80]);
 
-  await query("INSERT INTO damaged (id, productId, productName, qty, date, reason, type, value, postStatus) VALUES (?,?,?,?,?,?,?,?,?)", ['DMG-001','P103','حليب كامل الدسم 1 لتر',2,'2026-06-02','تلف بسبب انقطاع التبريد','تالف',8,'posted']);
-  await query("INSERT INTO damaged (id, productId, productName, qty, date, reason, type, value, postStatus) VALUES (?,?,?,?,?,?,?,?,?)", ['DMG-002','P105','جبنة شيدر قالب 1 كجم',1,'2026-05-25','انتهاء صلاحية','منتهي الصلاحية',25,'posted']);
+  await executeQuery("INSERT INTO damaged (id, productId, productName, qty, date, reason, type, value, postStatus) VALUES (?,?,?,?,?,?,?,?,?)", ['DMG-001','P103','حليب كامل الدسم 1 لتر',2,'2026-06-02','تلف بسبب انقطاع التبريد','تالف',8,'posted']);
+  await executeQuery("INSERT INTO damaged (id, productId, productName, qty, date, reason, type, value, postStatus) VALUES (?,?,?,?,?,?,?,?,?)", ['DMG-002','P105','جبنة شيدر قالب 1 كجم',1,'2026-05-25','انتهاء صلاحية','منتهي الصلاحية',25,'posted']);
 
-  await query("INSERT INTO expenses (id, category, date, amount, description, postStatus) VALUES (?,?,?,?,?,?)", ['EXP-001','إيجارات','2026-06-01',1500,'إيجار المستودع الشهري','posted']);
-  await query("INSERT INTO expenses (id, category, date, amount, description, postStatus) VALUES (?,?,?,?,?,?)", ['EXP-002','مرتبات','2026-06-02',3000,'راتب المحاسب','posted']);
-  await query("INSERT INTO expenses (id, category, date, amount, description, postStatus) VALUES (?,?,?,?,?,?)", ['EXP-003','تشغيلية','2026-06-04',150,'فاتورة الكهرباء','posted']);
-  await query("INSERT INTO expenses (id, category, date, amount, description, postStatus) VALUES (?,?,?,?,?,?)", ['EXP-004','مرتبات','2026-06-05',2500,'راتب مندوب المبيعات','posted']);
-  await query("INSERT INTO expenses (id, category, date, amount, description, postStatus) VALUES (?,?,?,?,?,?)", ['EXP-005','تشغيلية','2026-06-05',200,'صيانة المكيفات','posted']);
+  await executeQuery("INSERT INTO expenses (id, category, date, amount, description, postStatus) VALUES (?,?,?,?,?,?)", ['EXP-001','إيجارات','2026-06-01',1500,'إيجار المستودع الشهري','posted']);
+  await executeQuery("INSERT INTO expenses (id, category, date, amount, description, postStatus) VALUES (?,?,?,?,?,?)", ['EXP-002','مرتبات','2026-06-02',3000,'راتب المحاسب','posted']);
+  await executeQuery("INSERT INTO expenses (id, category, date, amount, description, postStatus) VALUES (?,?,?,?,?,?)", ['EXP-003','تشغيلية','2026-06-04',150,'فاتورة الكهرباء','posted']);
+  await executeQuery("INSERT INTO expenses (id, category, date, amount, description, postStatus) VALUES (?,?,?,?,?,?)", ['EXP-004','مرتبات','2026-06-05',2500,'راتب مندوب المبيعات','posted']);
+  await executeQuery("INSERT INTO expenses (id, category, date, amount, description, postStatus) VALUES (?,?,?,?,?,?)", ['EXP-005','تشغيلية','2026-06-05',200,'صيانة المكيفات','posted']);
 
-  await query("INSERT INTO stocktakes (id, date, productId, productName, systemQty, physicalQty, difference, status, postStatus) VALUES (?,?,?,?,?,?,?,?,?)", ['STK-001','2026-05-30','P101','أرز بسمتي فاخر 5كجم',52,52,0,'مطابق','posted']);
-  await query("INSERT INTO stocktakes (id, date, productId, productName, systemQty, physicalQty, difference, status, postStatus) VALUES (?,?,?,?,?,?,?,?,?)", ['STK-002','2026-05-30','P102','زيت دوار الشمس 1.5 لتر',60,58,-2,'عجز','posted']);
+  await executeQuery("INSERT INTO stocktakes (id, date, productId, productName, systemQty, physicalQty, difference, status, postStatus) VALUES (?,?,?,?,?,?,?,?,?)", ['STK-001','2026-05-30','P101','أرز بسمتي فاخر 5كجم',52,52,0,'مطابق','posted']);
+  await executeQuery("INSERT INTO stocktakes (id, date, productId, productName, systemQty, physicalQty, difference, status, postStatus) VALUES (?,?,?,?,?,?,?,?,?)", ['STK-002','2026-05-30','P102','زيت دوار الشمس 1.5 لتر',60,58,-2,'عجز','posted']);
 
-  await query("INSERT INTO collections (id, customerId, customerName, amount, date, method, repId, repName, postStatus) VALUES (?,?,?,?,?,?,?,?,?)", ['COL-001','C301','سوبرماركت النجمة',200,'2026-06-02','cash','U003','أحمد المندوب','posted']);
-  await query("INSERT INTO collections (id, customerId, customerName, amount, date, method, repId, repName, postStatus) VALUES (?,?,?,?,?,?,?,?,?)", ['COL-002','C302','أسواق المدينة الاستهلاكية',500,'2026-06-03','transfer','U004','سارة المندوبة','posted']);
+  await executeQuery("INSERT INTO collections (id, customerId, customerName, amount, date, method, repId, repName, postStatus) VALUES (?,?,?,?,?,?,?,?,?)", ['COL-001','C301','سوبرماركت النجمة',200,'2026-06-02','cash','U003','أحمد المندوب','posted']);
+  await executeQuery("INSERT INTO collections (id, customerId, customerName, amount, date, method, repId, repName, postStatus) VALUES (?,?,?,?,?,?,?,?,?)", ['COL-002','C302','أسواق المدينة الاستهلاكية',500,'2026-06-03','transfer','U004','سارة المندوبة','posted']);
 
-  await query('INSERT INTO supplier_payments (id, supplierId, supplierName, amount, date, method) VALUES (?,?,?,?,?,?)', ['SP-001','S201','شركة البركة للمواد الغذائية',800,'2026-05-15','cash']);
+  await executeQuery('INSERT INTO supplier_payments (id, supplierId, supplierName, amount, date, method) VALUES (?,?,?,?,?,?)', ['SP-001','S201','شركة البركة للمواد الغذائية',800,'2026-05-15','cash']);
 }
 
 export function isPostgres() {
   return usePostgres;
 }
 
-initTables()
-  .then(() => migratePostingSchema())
-  .then(() => seedIfEmpty())
-  .catch(console.error);

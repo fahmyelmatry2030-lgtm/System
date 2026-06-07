@@ -10,11 +10,18 @@ export async function POST(request) {
     }
 
     const result = await query('SELECT id, username, fullName, role FROM users WHERE username = ? AND password = ? AND active = 1', [username, password]);
-    const user = result.rows[0];
+    const row = result.rows[0];
 
-    if (!user) {
+    if (!row) {
       return NextResponse.json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' }, { status: 401 });
     }
+
+    const user = {
+      id: row.id,
+      username: row.username,
+      fullName: row.fullname || row.fullName,
+      role: row.role,
+    };
 
     return NextResponse.json({ user });
   } catch (error) {
