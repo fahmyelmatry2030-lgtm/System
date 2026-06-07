@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs';
+import { isPostgres } from '@/lib/db';
 
 export async function GET(request) {
   try {
     const role = request.nextUrl.searchParams.get('role');
     if (!role || !['admin', 'accountant'].includes(role)) {
       return NextResponse.json({ error: 'غير مصرح لك بتنزيل النسخة الاحتياطية' }, { status: 403 });
+    }
+
+    if (isPostgres()) {
+      return NextResponse.json({
+        error: 'النسخة الاحتياطية متاحة محلياً فقط. على Vercel استخدم نسخ PostgreSQL الاحتياطية من لوحة التحكم.',
+      }, { status: 400 });
     }
 
     const dbPath = path.join(process.cwd(), 'database.sqlite');

@@ -243,8 +243,8 @@ export async function postRecord(entity, id, user) {
   if (apply) await apply(id);
 
   await query(
-    `UPDATE ${table} SET postStatus = ?, postedBy = ?, postedByName = ?, postedAt = datetime('now') WHERE id = ?`,
-    ['posted', user?.id || null, user?.fullName || null, id]
+    `UPDATE ${table} SET postStatus = ?, postedBy = ?, postedByName = ?, postedAt = ? WHERE id = ?`,
+    ['posted', user?.id || null, user?.fullName || null, new Date().toISOString(), id]
   );
 }
 
