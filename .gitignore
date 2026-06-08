@@ -43,10 +43,10 @@ yarn-error.log*
 database.db
 database.db-shm
 database.db-wal
+*.bak
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
 
-.vercel
 .env*.local
