@@ -44,7 +44,8 @@ export default function AuthGuard({ children, allowedRoles = ['admin', 'accounta
       localStorage.removeItem('erp_user');
       router.push('/');
     }
-  }, [pathname, router, allowedRoles]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, router, JSON.stringify(allowedRoles)]);
 
   if (!authorized) {
     return (
