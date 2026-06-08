@@ -39,8 +39,6 @@ export default function Sidebar({ user }) {
     { href: '/customers', label: 'العملاء', icon: Users, roles: ['admin', 'accountant', 'rep'] },
     { href: '/suppliers', label: 'الموردين', icon: Users, roles: ['admin', 'accountant'] },
     { href: '/inventory', label: 'المخزون', icon: Package, roles: ['admin', 'accountant', 'rep'] },
-    { href: '/sales', label: 'المبيعات', icon: ShoppingCart, roles: ['admin', 'accountant', 'rep'] },
-    { href: '/purchases', label: 'المشتريات', icon: ArrowDownLeft, roles: ['admin', 'accountant'] },
     { href: '/returns', label: 'المرتجعات', icon: RotateCcw, roles: ['admin', 'accountant'] },
     { href: '/collections', label: 'التحصيلات', icon: DollarSign, roles: ['admin', 'accountant', 'rep'] },
     { href: '/expenses', label: 'المصروفات', icon: DollarSign, roles: ['admin', 'accountant'] },

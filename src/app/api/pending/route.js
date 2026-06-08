@@ -3,8 +3,6 @@ import { NextResponse } from 'next/server';
 import { getPostStatus } from '@/lib/api-auth';
 
 const SOURCES = [
-  { entity: 'sales', table: 'sales', label: 'فاتورة بيع', partyField: 'customerName', amountField: 'total', dateField: 'date', href: '/sales' },
-  { entity: 'purchases', table: 'purchases', label: 'فاتورة شراء', partyField: 'supplierName', amountField: 'total', dateField: 'date', href: '/purchases' },
   { entity: 'collections', table: 'collections', label: 'سند قبض', partyField: 'customerName', amountField: 'amount', dateField: 'date', href: '/collections' },
   { entity: 'returns', table: 'returns', label: 'مرتجع', partyField: 'entityName', amountField: 'total', dateField: 'date', href: '/returns' },
   { entity: 'expenses', table: 'expenses', label: 'مصروف', partyField: 'category', amountField: 'amount', dateField: 'date', href: '/expenses' },

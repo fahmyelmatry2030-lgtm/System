@@ -62,7 +62,7 @@ export async function PUT(request) {
   try {
     const data = await request.json();
     const user = getUserFromRequest(data);
-    const { id, customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName } = data;
+    const { id, customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, items } = data;
     if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
 
     const existing = (await query('SELECT * FROM sales WHERE id = ?', [id])).rows[0];
@@ -71,10 +71,29 @@ export async function PUT(request) {
       return NextResponse.json({ error: 'لا يمكن تعديل عملية مرحّلة إلا من قبل المدير' }, { status: 403 });
     }
 
+    const wasPosted = isPosted(existing);
+    if (wasPosted) {
+      await reverseSaleEffects(id);
+    }
+
     await query(
       'UPDATE sales SET customerId=?, customerName=?, date=?, total=?, paidAmount=?, paymentStatus=?, repId=?, repName=? WHERE id=?',
       [customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, id]
     );
+
+    if (items && Array.isArray(items)) {
+      await query('DELETE FROM sale_items WHERE saleId=?', [id]);
+      for (const item of items) {
+        await query(
+          'INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)',
+          [id, item.productId, item.productName, item.qty, item.price, item.qty * item.price]
+        );
+      }
+    }
+
+    if (wasPosted) {
+      await applySaleEffects(id);
+    }
 
     return NextResponse.json({ success: true, id });
   } catch (error) {
