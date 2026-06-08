@@ -40,7 +40,17 @@ async function executeQuery(sqlString, params = []) {
 export async function ensureDb() {
   if (dbReady) return;
   if (!dbInitPromise) {
-    dbInitPromise = bootstrap().catch((error) => {
+    dbInitPromise = (async () => {
+      // Fast path: check if database is already initialized to avoid 60+ queries on cold start
+      try {
+        await executeQuery("SELECT 1 FROM users LIMIT 1");
+        dbReady = true;
+        return;
+      } catch (e) {
+        // Table doesn't exist, proceed to full bootstrap
+      }
+      await bootstrap();
+    })().catch((error) => {
       dbInitPromise = null;
       console.error('Database bootstrap failed:', error);
       throw error;
