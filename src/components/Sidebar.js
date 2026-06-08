@@ -37,6 +37,7 @@ export default function Sidebar({ user }) {
     { href: '/pos', label: 'الكاشير (POS)', icon: MonitorSmartphone, roles: ['admin', 'rep'] },
     { href: '/pending', label: 'بانتظار الترحيل', icon: Clock, roles: ['admin'], badge: pendingCount },
     { href: '/customers', label: 'العملاء', icon: Users, roles: ['admin', 'accountant', 'rep'] },
+    { href: '/debts', label: 'ديون العملاء', icon: FileText, roles: ['admin', 'accountant', 'rep'] },
     { href: '/suppliers', label: 'الموردين', icon: Users, roles: ['admin', 'accountant'] },
     { href: '/inventory', label: 'المخزون', icon: Package, roles: ['admin', 'accountant', 'rep'] },
     { href: '/returns', label: 'المرتجعات', icon: RotateCcw, roles: ['admin', 'accountant'] },
