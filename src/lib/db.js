@@ -105,6 +105,15 @@ async function bootstrap() {
 }
 
 const POSTGRES_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS settings (
+    id TEXT PRIMARY KEY,
+    companyName TEXT,
+    taxRate REAL,
+    currency TEXT,
+    logoUrl TEXT,
+    footerMessage TEXT,
+    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
@@ -315,6 +324,8 @@ export async function seedIfEmpty() {
   const result = await executeQuery('SELECT COUNT(*) as c FROM products');
   const count = parseInt(result.rows[0]?.c || '0', 10);
   if (count > 0) return;
+
+  await executeQuery("INSERT INTO settings (id, companyName, taxRate, currency, footerMessage) VALUES (?,?,?,?,?)", ['1', 'شركتي التجارية', 15, 'ر.س', 'شكراً لتعاملكم معنا']);
 
   await executeQuery('INSERT INTO users (id, username, password, fullName, role) VALUES (?,?,?,?,?)', ['U001', 'admin', 'admin123', 'مدير النظام', 'admin']);
   await executeQuery('INSERT INTO users (id, username, password, fullName, role) VALUES (?,?,?,?,?)', ['U002', 'accountant', 'acc123', 'أحمد المحاسب', 'accountant']);

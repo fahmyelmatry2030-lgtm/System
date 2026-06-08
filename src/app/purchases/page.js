@@ -6,6 +6,7 @@ import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
 import PostStatusBadge from '@/components/PostStatusBadge';
 import PostActions from '@/components/PostActions';
+import PrintInvoice from '@/components/PrintInvoice';
 import { formatCurrency } from '@/lib/currency';
 import { withUser } from '@/lib/api-client';
 
@@ -15,6 +16,9 @@ export default function PurchasesPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [user, setUser] = useState(null);
+  const [printingRecord, setPrintingRecord] = useState(null);
+  const [settings, setSettings] = useState({});
   
   const [formData, setFormData] = useState({
     supplierId: '',
@@ -49,6 +53,12 @@ export default function PurchasesPage() {
   };
 
   useEffect(() => {
+    const storedUser = localStorage.getItem('erp_user');
+    if (storedUser) setUser(JSON.parse(storedUser));
+    
+    const storedSettings = localStorage.getItem('erp_settings');
+    if (storedSettings) setSettings(JSON.parse(storedSettings));
+    
     fetchData();
   }, []);
 
@@ -134,8 +144,21 @@ export default function PurchasesPage() {
     { header: 'الترحيل', render: (row) => <PostStatusBadge record={row} /> },
     { header: 'المدفوع', accessor: 'paidAmount', render: (row) => formatCurrency(row.paidAmount) },
     { header: 'المتبقي', accessor: (row) => formatCurrency(row.total - row.paidAmount) },
-    { header: 'ملاحظات', accessor: 'notes' },
-    { header: 'إجراءات', render: (row) => <PostActions entity="purchases" record={row} onPosted={fetchData} /> },
+    {
+      header: 'إجراءات',
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <PostActions entity="purchases" record={row} onPosted={fetchData} />
+          <button 
+            className="btn btn-secondary text-xs px-2 py-1" 
+            onClick={() => setPrintingRecord(row)}
+            title="طباعة الفاتورة"
+          >
+            🖨️
+          </button>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -288,10 +311,31 @@ export default function PurchasesPage() {
           
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>إلغاء</button>
-            <button type="submit" className="btn btn-primary">حفظ الفاتورة وإضافة للمخزون</button>
+            <button type="submit" className="btn btn-primary">حفظ الفاتورة</button>
           </div>
         </form>
       </Modal>
+
+      {printingRecord && (
+        <div className="fixed inset-0 z-50 bg-gray-500 bg-opacity-75 overflow-y-auto">
+          <div className="min-h-screen px-4 text-center">
+            <div className="fixed inset-0" onClick={() => setPrintingRecord(null)}></div>
+            <span className="inline-block h-screen align-middle" aria-hidden="true">&#8203;</span>
+            <div className="inline-block w-full max-w-4xl p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl relative">
+              <button 
+                onClick={() => setPrintingRecord(null)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-500 print-hide"
+              >
+                <span className="sr-only">Close</span>
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <PrintInvoice record={printingRecord} type="purchases" settings={settings} />
+            </div>
+          </div>
+        </div>
+      )}
     </AuthGuard>
   );
 }

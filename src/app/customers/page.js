@@ -108,11 +108,11 @@ export default function CustomersPage() {
     },
     {
       header: 'إجراءات',
-      render: (item) => (
-        <div className="flex gap-2">
-          <button onClick={() => handleStatement(item)} className="text-green-600 hover:underline">كشف حساب</button>
-          <button onClick={() => handleEdit(item)} className="text-blue-500 hover:underline">تعديل</button>
-          <button onClick={() => handleDelete(item.id)} className="text-red-500 hover:underline">حذف</button>
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <button onClick={() => handleEdit(row)} className="text-blue-500 hover:underline">تعديل</button>
+          <a href={`/customers/${row.id}`} className="text-green-600 hover:underline">كشف حساب</a>
+          <button onClick={() => handleDelete(row.id)} className="text-red-500 hover:underline">حذف</button>
         </div>
       ),
     },

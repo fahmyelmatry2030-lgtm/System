@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import StatsCard from '@/components/StatsCard';
+import DataTable from '@/components/DataTable';
+import { exportToExcel } from '@/lib/export';
 import { formatCurrency } from '@/lib/currency';
 import { getStoredUser } from '@/lib/api-client';
 
@@ -103,7 +105,10 @@ export default function Reports() {
         </div>
         
         <div className="card">
-          <h3 style={{ marginBottom: '16px', color: 'var(--danger)' }}>أصناف تجاوزت الحد الأدنى (تحتاج طلب)</h3>
+          <div className="flex justify-between mb-4">
+            <h3 style={{ color: 'var(--danger)' }}>أصناف تجاوزت الحد الأدنى (تحتاج طلب)</h3>
+            <button className="btn btn-secondary text-xs" onClick={() => exportToExcel(data.lowStock, 'النواقص')}>تصدير Excel 📊</button>
+          </div>
           {data.lowStock?.length > 0 ? (
             <table style={{ width: '100%', textAlign: 'right' }}>
               <thead>
@@ -143,7 +148,10 @@ export default function Reports() {
         
         <div className="grid-2">
           <div className="card">
-            <h3 style={{ marginBottom: '16px', color: 'var(--success)' }}>ديون لنا (عملاء)</h3>
+            <div className="flex justify-between mb-4">
+              <h3 style={{ color: 'var(--success)' }}>ديون لنا (عملاء)</h3>
+              <button className="btn btn-secondary text-xs" onClick={() => exportToExcel(data.customers, 'ديون_العملاء')}>تصدير Excel 📊</button>
+            </div>
             {data.customers?.length > 0 ? (
               <table style={{ width: '100%', textAlign: 'right' }}>
                 <thead>
@@ -167,7 +175,10 @@ export default function Reports() {
           </div>
 
           <div className="card">
-            <h3 style={{ marginBottom: '16px', color: 'var(--danger)' }}>ديون علينا (موردين)</h3>
+            <div className="flex justify-between mb-4">
+              <h3 style={{ color: 'var(--danger)' }}>ديون علينا (موردين)</h3>
+              <button className="btn btn-secondary text-xs" onClick={() => exportToExcel(data.suppliers, 'ديون_الموردين')}>تصدير Excel 📊</button>
+            </div>
             {data.suppliers?.length > 0 ? (
               <table style={{ width: '100%', textAlign: 'right' }}>
                 <thead>
@@ -235,7 +246,10 @@ export default function Reports() {
         </div>
 
         <div className="card" style={{ marginTop: '20px' }}>
-          <h3 style={{ marginBottom: '16px' }}>المبيعات حسب المندوب</h3>
+          <div className="flex justify-between mb-4">
+            <h3>المبيعات حسب المندوب</h3>
+            <button className="btn btn-secondary text-xs" onClick={() => exportToExcel(data.byRep, 'مبيعات_المناديب')}>تصدير Excel 📊</button>
+          </div>
           {data.byRep?.length > 0 ? (
             <table style={{ width: '100%', textAlign: 'right' }}>
               <thead>
@@ -277,7 +291,10 @@ export default function Reports() {
         </div>
 
         <div className="card" style={{ marginTop: '20px' }}>
-          <h3 style={{ marginBottom: '16px' }}>المشتريات حسب المورد</h3>
+          <div className="flex justify-between mb-4">
+            <h3>المشتريات حسب المورد</h3>
+            <button className="btn btn-secondary text-xs" onClick={() => exportToExcel(data.bySupplier, 'مشتريات_الموردين')}>تصدير Excel 📊</button>
+          </div>
           {data.bySupplier?.length > 0 ? (
             <table style={{ width: '100%', textAlign: 'right' }}>
               <thead>

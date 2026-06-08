@@ -1,5 +1,6 @@
 import DashboardCard from '@/components/DashboardCard';
 import PendingAlert from '@/components/PendingAlert';
+import DashboardCharts from '@/components/DashboardCharts';
 import { DollarSign, Wallet, LineChart, Receipt, Layers, Box, AlertTriangle, Users, ShoppingCart, ArrowDownLeft, FileText } from 'lucide-react';
 import { query } from '@/lib/db';
 import { formatCurrency } from '@/lib/currency';
@@ -204,6 +205,8 @@ export default async function Dashboard() {
           </div>
         </div>
       </div>
+
+      <DashboardCharts salesData={sales} />
     </div>
   );
 }

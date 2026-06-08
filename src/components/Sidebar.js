@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Users, Package, ShoppingCart, ArrowDownLeft,
   DollarSign, FileText, AlertTriangle, ClipboardCheck, Settings,
-  RotateCcw, Clock,
+  RotateCcw, Clock, BarChart2, MonitorSmartphone
 } from 'lucide-react';
 
 export default function Sidebar({ user }) {
@@ -34,6 +34,7 @@ export default function Sidebar({ user }) {
 
   const allLinks = [
     { href: '/dashboard', label: 'لوحة القيادة', icon: LayoutDashboard, roles: ['admin', 'accountant', 'rep'] },
+    { href: '/pos', label: 'الكاشير (POS)', icon: MonitorSmartphone, roles: ['admin', 'rep'] },
     { href: '/pending', label: 'بانتظار الترحيل', icon: Clock, roles: ['admin'], badge: pendingCount },
     { href: '/customers', label: 'العملاء', icon: Users, roles: ['admin', 'accountant', 'rep'] },
     { href: '/suppliers', label: 'الموردين', icon: Users, roles: ['admin', 'accountant'] },
@@ -45,8 +46,9 @@ export default function Sidebar({ user }) {
     { href: '/expenses', label: 'المصروفات', icon: DollarSign, roles: ['admin', 'accountant'] },
     { href: '/damaged', label: 'المواد التالفة', icon: AlertTriangle, roles: ['admin', 'accountant'] },
     { href: '/stocktake', label: 'جرد المخزون', icon: ClipboardCheck, roles: ['admin', 'accountant'] },
-    { href: '/reports', label: 'التقارير', icon: FileText, roles: ['admin', 'accountant'] },
-    { href: '/users', label: 'المستخدمين', icon: Settings, roles: ['admin'] },
+    { icon: BarChart2, label: 'التقارير', href: '/reports', roles: ['admin', 'accountant'] },
+    { icon: Users, label: 'المستخدمين', href: '/users', roles: ['admin'] },
+    { icon: Settings, label: 'الإعدادات', href: '/settings', roles: ['admin'] },
   ];
 
   const links = allLinks.filter((link) => !user?.role || link.roles.includes(user.role));

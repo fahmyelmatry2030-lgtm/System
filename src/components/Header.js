@@ -4,6 +4,7 @@ import { Menu, User, Bell, LogOut } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import ProfileModal from '@/components/ProfileModal';
 
 const ROLE_LABELS = {
   admin: 'مدير النظام',
@@ -15,6 +16,7 @@ export default function Header({ user }) {
   const router = useRouter();
   const [dateStr, setDateStr] = useState('');
   const [pendingCount, setPendingCount] = useState(0);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -77,15 +79,19 @@ export default function Header({ user }) {
           </Link>
         )}
 
-        <div className="flex items-center gap-3 bg-white pl-4 pr-2 py-1.5 rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-gray-100">
+        <button
+          onClick={() => setIsProfileOpen(true)}
+          className="flex items-center gap-3 bg-white pl-4 pr-2 py-1.5 rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all cursor-pointer"
+          title="الملف الشخصي وتغيير كلمة المرور"
+        >
           <div className="flex flex-col text-right">
             <span className="text-sm font-bold text-gray-800">{user?.fullName || 'مستخدم'}</span>
             <span className="text-[10px] text-gray-400">{ROLE_LABELS[user?.role] || ''}</span>
           </div>
-          <div className="w-9 h-9 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-600">
-            <User size={18} />
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-sm">
+            {user?.fullName?.charAt(0) || <User size={18} />}
           </div>
-        </div>
+        </button>
 
         <button
           onClick={handleLogout}
@@ -95,6 +101,8 @@ export default function Header({ user }) {
           <LogOut size={20} />
         </button>
       </div>
+
+      <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} />
     </header>
   );
 }
