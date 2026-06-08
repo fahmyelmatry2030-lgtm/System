@@ -33,7 +33,7 @@ async function executeQuery(sqlString, params = []) {
   }
   
   const pgSql = toPgSql(sqlString);
-  const result = await pool(pgSql, ...params);
+  const result = await pool(pgSql, params);
   return { rows: result, rowCount: result.length };
 }
 
