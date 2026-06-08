@@ -26,6 +26,6 @@ export async function POST(request) {
     return NextResponse.json({ user });
   } catch (error) {
     console.error('Login error:', error);
-    return NextResponse.json({ error: 'حدث خطأ في الخادم' }, { status: 500 });
+    return NextResponse.json({ error: 'حدث خطأ في الخادم', details: error.message, conn: process.env.POSTGRES_URL ? 'has_url' : 'no_url' }, { status: 500 });
   }
 }

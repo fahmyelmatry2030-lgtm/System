@@ -1,35 +1,26 @@
-import { Pool } from 'pg';
+import { neon } from '@neondatabase/serverless';
 import path from 'path';
 
-function cleanConnectionString(url = '') {
-  return url
-    .replace(/[&?]channel_binding=[^&]*/gi, '')
-    .replace(/\?&/, '?')
-    .replace(/&&/g, '&')
-    .replace(/\?$/, '');
-}
-
-const connectionString = cleanConnectionString(process.env.DATABASE_URL || process.env.POSTGRES_URL || '');
+const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
 const usePostgres = !!connectionString;
 
 let pool = null;
 let sqliteDb = null;
 let dbReady = false;
 let dbInitPromise = null;
+let sqliteInitialized = false;
 
 if (usePostgres) {
-  pool = new Pool({
-    connectionString,
-    ssl: { rejectUnauthorized: false },
-    max: 5,
-    idleTimeoutMillis: 10000,
-    connectionTimeoutMillis: 10000,
-  });
-} else {
+  pool = neon(connectionString);
+}
+
+async function ensureSqlite() {
+  if (sqliteInitialized) return;
   const Database = (await import('better-sqlite3')).default;
   const dbPath = path.join(process.cwd(), 'database.sqlite');
   sqliteDb = new Database(dbPath);
   sqliteDb.pragma('journal_mode = WAL');
+  sqliteInitialized = true;
 }
 
 const POSTING_TABLES = ['sales', 'purchases', 'returns', 'collections', 'expenses', 'damaged', 'stocktakes'];
@@ -50,10 +41,12 @@ function toPgSql(sql) {
 
 async function executeQuery(sqlString, params = []) {
   if (usePostgres) {
-    const result = await pool.query(toPgSql(sqlString), params);
-    return { rows: result.rows, rowCount: result.rowCount };
+    const pgSql = toPgSql(sqlString);
+    const result = await pool(pgSql, ...params);
+    return { rows: result, rowCount: result.length };
   }
 
+  await ensureSqlite();
   const stmt = sqliteDb.prepare(sqlString);
   const isSelect = sqlString.trim().toUpperCase().startsWith('SELECT');
   if (isSelect) {
@@ -96,6 +89,7 @@ export async function get(sqlString, params = []) {
 }
 
 async function migratePostingSchema() {
+  if (!usePostgres) await ensureSqlite();
   for (const table of POSTING_TABLES) {
     for (const col of POSTING_COLUMN_DEFS) {
       try {
@@ -404,7 +398,7 @@ export async function initTables() {
       .map((s) => s.trim())
       .filter(Boolean);
     for (const sql of statements) {
-      await pool.query(sql);
+      await pool(sql);
     }
   } else {
     for (const table of SQLITE_TABLES) {
