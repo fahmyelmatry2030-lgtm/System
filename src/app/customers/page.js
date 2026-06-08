@@ -25,7 +25,11 @@ export default function CustomersPage() {
   };
 
   useEffect(() => {
-    fetchData();
+    const load = async () => {
+      await fetchData();
+    };
+
+    load();
   }, []);
 
   const handleAdd = () => {

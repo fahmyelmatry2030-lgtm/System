@@ -54,8 +54,12 @@ export default function ReturnsPage() {
   };
 
   useEffect(() => {
-    setUser(getStoredUser());
-    fetchData();
+    const load = async () => {
+      setUser(getStoredUser());
+      await fetchData();
+    };
+
+    load();
   }, []);
 
   const addItem = () => {

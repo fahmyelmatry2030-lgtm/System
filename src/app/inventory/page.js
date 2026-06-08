@@ -22,7 +22,11 @@ export default function InventoryPage() {
   };
 
   useEffect(() => {
-    fetchData();
+    const load = async () => {
+      await fetchData();
+    };
+
+    load();
   }, []);
 
   const handleAdd = () => {
@@ -38,7 +42,7 @@ export default function InventoryPage() {
   const handleDelete = async (id) => {
     if (confirm('هل أنت متأكد من حذف هذا المنتج؟')) {
       try {
-        await fetch(`/api/products/${id}`, { method: 'DELETE' });
+        await fetch(`/api/products?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
         fetchData();
       } catch (err) {
         console.error(err);
@@ -53,7 +57,7 @@ export default function InventoryPage() {
     
     try {
       if (editingItem) {
-        await fetch(`/api/products/${editingItem.id}`, {
+        await fetch('/api/products', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

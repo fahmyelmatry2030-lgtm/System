@@ -33,7 +33,11 @@ export default function Users() {
   };
 
   useEffect(() => {
-    fetchUsers();
+    const load = async () => {
+      await fetchUsers();
+    };
+
+    load();
   }, []);
 
   const openAddModal = () => {

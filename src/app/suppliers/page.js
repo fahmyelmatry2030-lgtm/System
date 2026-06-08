@@ -22,7 +22,11 @@ export default function SuppliersPage() {
   };
 
   useEffect(() => {
-    fetchData();
+    const load = async () => {
+      await fetchData();
+    };
+
+    load();
   }, []);
 
   const handleAdd = () => {
@@ -38,7 +42,7 @@ export default function SuppliersPage() {
   const handleDelete = async (id) => {
     if (confirm('هل أنت متأكد من حذف هذا المورد؟')) {
       try {
-        await fetch(`/api/suppliers/${id}`, { method: 'DELETE' });
+        await fetch(`/api/suppliers?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
         fetchData();
       } catch (err) {
         console.error(err);
@@ -53,7 +57,7 @@ export default function SuppliersPage() {
     
     try {
       if (editingItem) {
-        await fetch(`/api/suppliers/${editingItem.id}`, {
+        await fetch('/api/suppliers', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

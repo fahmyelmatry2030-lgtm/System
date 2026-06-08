@@ -35,7 +35,11 @@ export default function Expenses() {
   };
 
   useEffect(() => {
-    fetchExpenses();
+    const load = async () => {
+      await fetchExpenses();
+    };
+
+    load();
   }, []);
 
   const handleSubmit = async (e) => {

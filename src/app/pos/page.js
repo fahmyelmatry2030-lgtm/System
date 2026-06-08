@@ -20,16 +20,25 @@ export default function POSPage() {
   const barcodeRef = useRef(null);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('erp_user');
-    if (storedUser) setUser(JSON.parse(storedUser));
-    
-    Promise.all([
-      fetch('/api/products').then(r => r.json()),
-      fetch('/api/customers').then(r => r.json())
-    ]).then(([prodData, custData]) => {
-      setProducts(prodData.products || []);
-      setCustomers(custData.customers || []);
-    });
+    const load = async () => {
+      const storedUser = localStorage.getItem('erp_user');
+      if (storedUser) setUser(JSON.parse(storedUser));
+      
+      try {
+        const [prodRes, custRes] = await Promise.all([
+          fetch('/api/products'),
+          fetch('/api/customers')
+        ]);
+        const prodData = await prodRes.json();
+        const custData = await custRes.json();
+        setProducts(prodData.products || []);
+        setCustomers(custData.customers || []);
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    load();
   }, []);
 
   // Handle barcode submission

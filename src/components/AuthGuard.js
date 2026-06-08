@@ -11,39 +11,43 @@ export default function AuthGuard({ children, allowedRoles = ['admin', 'accounta
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    // Check if user is logged in
-    const storedUser = localStorage.getItem('erp_user');
-    
-    if (!storedUser) {
-      if (pathname !== '/') {
-        router.push('/');
-      } else {
-        setAuthorized(true); // Allow access to login page if not logged in
-      }
-      return;
-    }
+    const load = () => {
+      // Check if user is logged in
+      const storedUser = localStorage.getItem('erp_user');
 
-    try {
-      const parsedUser = JSON.parse(storedUser);
-      setUser(parsedUser);
-
-      // If user is logged in and on login page, redirect to dashboard
-      if (pathname === '/') {
-        router.push('/dashboard');
+      if (!storedUser) {
+        if (pathname !== '/') {
+          router.push('/');
+        } else {
+          setAuthorized(true); // Allow access to login page if not logged in
+        }
         return;
       }
 
-      // Check role permissions
-      if (allowedRoles.includes(parsedUser.role)) {
-        setAuthorized(true);
-      } else {
-        // Redirect to a default authorized page or show unauthorized message
-        router.push('/dashboard'); 
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
+
+        // If user is logged in and on login page, redirect to dashboard
+        if (pathname === '/') {
+          router.push('/dashboard');
+          return;
+        }
+
+        // Check role permissions
+        if (allowedRoles.includes(parsedUser.role)) {
+          setAuthorized(true);
+        } else {
+          // Redirect to a default authorized page or show unauthorized message
+          router.push('/dashboard'); 
+        }
+      } catch (e) {
+        localStorage.removeItem('erp_user');
+        router.push('/');
       }
-    } catch (e) {
-      localStorage.removeItem('erp_user');
-      router.push('/');
-    }
+    };
+
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, router, JSON.stringify(allowedRoles)]);
 

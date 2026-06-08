@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import StatsCard from '@/components/StatsCard';
 import DataTable from '@/components/DataTable';
@@ -17,7 +17,11 @@ export default function Reports() {
   const [backupLoading, setBackupLoading] = useState(false);
 
   useEffect(() => {
-    setUser(getStoredUser());
+    const load = () => {
+      setUser(getStoredUser());
+    };
+
+    load();
   }, []);
 
   const handleBackup = async () => {
@@ -48,7 +52,7 @@ export default function Reports() {
     }
   };
 
-  const fetchReport = async (type) => {
+  const fetchReport = useCallback(async (type) => {
     setLoading(true);
     try {
       let url = `/api/reports?type=${type}`;
@@ -63,11 +67,15 @@ export default function Reports() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateRange]);
 
   useEffect(() => {
-    fetchReport(reportType);
-  }, [reportType, dateRange]);
+    const load = async () => {
+      await fetchReport(reportType);
+    };
+
+    load();
+  }, [reportType, dateRange, fetchReport]);
 
   const renderFinancialReport = () => {
     if (!data) return null;

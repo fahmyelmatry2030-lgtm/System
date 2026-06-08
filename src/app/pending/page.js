@@ -24,7 +24,11 @@ export default function PendingPage() {
   }, []);
 
   useEffect(() => {
-    fetchPending();
+    const load = async () => {
+      await fetchPending();
+    };
+
+    load();
   }, [fetchPending]);
 
   const columns = [

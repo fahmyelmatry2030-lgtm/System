@@ -46,10 +46,13 @@ export default function Collections() {
   };
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('erp_user');
-    if (storedUser) setUser(JSON.parse(storedUser));
-    
-    fetchData();
+    const load = async () => {
+      const storedUser = localStorage.getItem('erp_user');
+      if (storedUser) setUser(JSON.parse(storedUser));
+      await fetchData();
+    };
+
+    load();
   }, []);
 
   const handleSubmit = async (e) => {

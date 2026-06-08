@@ -15,9 +15,10 @@ export default function SettingsPage() {
   });
 
   useEffect(() => {
-    fetch('/api/settings')
-      .then(res => res.json())
-      .then(data => {
+    const load = async () => {
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
         if (data.settings) {
           setFormData({
             companyName: data.settings.companyname || '',
@@ -27,8 +28,14 @@ export default function SettingsPage() {
             footerMessage: data.settings.footermessage || ''
           });
         }
+      } catch (error) {
+        console.error(error);
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    load();
   }, []);
 
   const handleSubmit = async (e) => {

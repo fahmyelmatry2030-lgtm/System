@@ -43,7 +43,11 @@ export default function Stocktake() {
   };
 
   useEffect(() => {
-    fetchData();
+    const load = async () => {
+      await fetchData();
+    };
+
+    load();
   }, []);
 
   const handleSubmit = async (e) => {

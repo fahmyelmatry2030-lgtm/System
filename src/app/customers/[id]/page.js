@@ -12,12 +12,19 @@ export default function CustomerStatementPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/customers/statement?id=${id}`)
-      .then(res => res.json())
-      .then(result => {
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/customers/statement?id=${id}`);
+        const result = await res.json();
         setData(result);
+      } catch (error) {
+        console.error(error);
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    load();
   }, [id]);
 
   const handlePrint = () => {

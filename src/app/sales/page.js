@@ -55,13 +55,17 @@ export default function SalesPage() {
   };
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('erp_user');
-    if (storedUser) setUser(JSON.parse(storedUser));
-    
-    const storedSettings = localStorage.getItem('erp_settings');
-    if (storedSettings) setSettings(JSON.parse(storedSettings));
-    
-    fetchData();
+    const load = async () => {
+      const storedUser = localStorage.getItem('erp_user');
+      if (storedUser) setUser(JSON.parse(storedUser));
+      
+      const storedSettings = localStorage.getItem('erp_settings');
+      if (storedSettings) setSettings(JSON.parse(storedSettings));
+      
+      await fetchData();
+    };
+
+    load();
   }, []);
 
   const addItem = () => {
