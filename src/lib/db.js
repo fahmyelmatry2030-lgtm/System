@@ -1,26 +1,14 @@
 import { neon } from '@neondatabase/serverless';
-import path from 'path';
 
 const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
 const usePostgres = !!connectionString;
 
 let pool = null;
-let sqliteDb = null;
 let dbReady = false;
 let dbInitPromise = null;
-let sqliteInitialized = false;
 
 if (usePostgres) {
   pool = neon(connectionString);
-}
-
-async function ensureSqlite() {
-  if (sqliteInitialized) return;
-  const Database = (await import('better-sqlite3')).default;
-  const dbPath = path.join(process.cwd(), 'database.sqlite');
-  sqliteDb = new Database(dbPath);
-  sqliteDb.pragma('journal_mode = WAL');
-  sqliteInitialized = true;
 }
 
 const POSTING_TABLES = ['sales', 'purchases', 'returns', 'collections', 'expenses', 'damaged', 'stocktakes'];
@@ -40,21 +28,13 @@ function toPgSql(sql) {
 }
 
 async function executeQuery(sqlString, params = []) {
-  if (usePostgres) {
-    const pgSql = toPgSql(sqlString);
-    const result = await pool(pgSql, ...params);
-    return { rows: result, rowCount: result.length };
+  if (!usePostgres) {
+    throw new Error('DATABASE_URL environment variable is required. Please set up a Neon PostgreSQL database on Vercel.');
   }
-
-  await ensureSqlite();
-  const stmt = sqliteDb.prepare(sqlString);
-  const isSelect = sqlString.trim().toUpperCase().startsWith('SELECT');
-  if (isSelect) {
-    const rows = stmt.all(...params);
-    return { rows, rowCount: rows.length };
-  }
-  const result = stmt.run(...params);
-  return { rows: [], rowCount: result.changes, rowsAffected: result.changes, lastInsertRowid: result.lastInsertRowid };
+  
+  const pgSql = toPgSql(sqlString);
+  const result = await pool(pgSql, ...params);
+  return { rows: result, rowCount: result.length };
 }
 
 export async function ensureDb() {
@@ -89,18 +69,14 @@ export async function get(sqlString, params = []) {
 }
 
 async function migratePostingSchema() {
-  if (!usePostgres) await ensureSqlite();
+  if (!usePostgres) {
+    throw new Error('DATABASE_URL environment variable is required. Please set up a Neon PostgreSQL database on Vercel.');
+  }
+  
   for (const table of POSTING_TABLES) {
     for (const col of POSTING_COLUMN_DEFS) {
       try {
-        if (usePostgres) {
-          await executeQuery(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${col.name} ${col.pg}`);
-        } else {
-          const columns = sqliteDb.prepare(`PRAGMA table_info(${table})`).all();
-          if (!columns.some((c) => c.name === col.name)) {
-            sqliteDb.exec(`ALTER TABLE ${table} ADD COLUMN ${col.name} ${col.sqlite}`);
-          }
-        }
+        await executeQuery(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${col.name} ${col.pg}`);
       } catch (error) {
         if (!String(error.message).includes('duplicate column name')) {
           console.error(`Migration error on ${table}.${col.name}:`, error);
@@ -310,100 +286,18 @@ const POSTGRES_SCHEMA = `
     method TEXT DEFAULT 'cash',
     notes TEXT,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-`;
-
-const SQLITE_TABLES = [
-  `CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL,
-    fullName TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'rep', active INTEGER DEFAULT 1,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS products (
-    id TEXT PRIMARY KEY, name TEXT NOT NULL, sku TEXT, category TEXT, qty INTEGER DEFAULT 0,
-    purchasePrice REAL DEFAULT 0, sellPrice REAL DEFAULT 0, expiryDate TEXT, threshold INTEGER DEFAULT 5,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS suppliers (
-    id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, email TEXT, balance REAL DEFAULT 0,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS customers (
-    id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, balance REAL DEFAULT 0,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS purchases (
-    id TEXT PRIMARY KEY, supplierId TEXT, supplierName TEXT, date TEXT, total REAL DEFAULT 0,
-    paidAmount REAL DEFAULT 0, notes TEXT, postStatus TEXT DEFAULT 'pending', postedBy TEXT,
-    postedByName TEXT, postedAt TEXT, createdBy TEXT, createdByName TEXT,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS purchase_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, purchaseId TEXT, productId TEXT, productName TEXT,
-    qty INTEGER, price REAL, total REAL
-  )`,
-  `CREATE TABLE IF NOT EXISTS sales (
-    id TEXT PRIMARY KEY, customerId TEXT, customerName TEXT, date TEXT, total REAL DEFAULT 0,
-    discount REAL DEFAULT 0, paidAmount REAL DEFAULT 0, paymentStatus TEXT DEFAULT 'unpaid',
-    repId TEXT, repName TEXT, notes TEXT, postStatus TEXT DEFAULT 'pending', postedBy TEXT,
-    postedByName TEXT, postedAt TEXT, createdBy TEXT, createdByName TEXT,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS sale_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, saleId TEXT, productId TEXT, productName TEXT,
-    qty INTEGER, price REAL, total REAL
-  )`,
-  `CREATE TABLE IF NOT EXISTS returns (
-    id TEXT PRIMARY KEY, type TEXT DEFAULT 'supplier', entityId TEXT, entityName TEXT, date TEXT,
-    reason TEXT, total REAL DEFAULT 0, postStatus TEXT DEFAULT 'pending', postedBy TEXT,
-    postedByName TEXT, postedAt TEXT, createdBy TEXT, createdByName TEXT,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS return_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, returnId TEXT, productId TEXT, productName TEXT,
-    qty INTEGER, price REAL, total REAL
-  )`,
-  `CREATE TABLE IF NOT EXISTS damaged (
-    id TEXT PRIMARY KEY, productId TEXT, productName TEXT, qty INTEGER, date TEXT, reason TEXT,
-    type TEXT DEFAULT 'تالف', value REAL, postStatus TEXT DEFAULT 'pending', postedBy TEXT,
-    postedByName TEXT, postedAt TEXT, createdBy TEXT, createdByName TEXT,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS expenses (
-    id TEXT PRIMARY KEY, category TEXT, date TEXT, amount REAL, description TEXT,
-    postStatus TEXT DEFAULT 'pending', postedBy TEXT, postedByName TEXT, postedAt TEXT,
-    createdBy TEXT, createdByName TEXT, createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS stocktakes (
-    id TEXT PRIMARY KEY, date TEXT, productId TEXT, productName TEXT, systemQty INTEGER,
-    physicalQty INTEGER, difference INTEGER, status TEXT, notes TEXT, postStatus TEXT DEFAULT 'pending',
-    postedBy TEXT, postedByName TEXT, postedAt TEXT, createdBy TEXT, createdByName TEXT,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS collections (
-    id TEXT PRIMARY KEY, customerId TEXT, customerName TEXT, amount REAL, date TEXT,
-    method TEXT DEFAULT 'cash', notes TEXT, repId TEXT, repName TEXT, postStatus TEXT DEFAULT 'pending',
-    postedBy TEXT, postedByName TEXT, postedAt TEXT, createdBy TEXT, createdByName TEXT,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS supplier_payments (
-    id TEXT PRIMARY KEY, supplierId TEXT, supplierName TEXT, amount REAL, date TEXT,
-    method TEXT DEFAULT 'cash', notes TEXT, createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`,
-];
+  )`;
 
 export async function initTables() {
-  if (usePostgres) {
-    const statements = POSTGRES_SCHEMA.split(';')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    for (const sql of statements) {
-      await pool(sql);
-    }
-  } else {
-    for (const table of SQLITE_TABLES) {
-      await executeQuery(table);
-    }
+  if (!usePostgres) {
+    throw new Error('DATABASE_URL environment variable is required. Please set up a Neon PostgreSQL database on Vercel.');
+  }
+  
+  const statements = POSTGRES_SCHEMA.split(';')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const sql of statements) {
+    await pool(sql);
   }
 }
 
