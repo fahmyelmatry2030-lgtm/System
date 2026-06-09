@@ -575,6 +575,16 @@ const SQLITE_SCHEMA = `
     notes TEXT,
     createdAt TEXT
   );
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id TEXT PRIMARY KEY,
+    action TEXT NOT NULL,
+    entity TEXT NOT NULL,
+    recordId TEXT NOT NULL,
+    userId TEXT,
+    userName TEXT,
+    details TEXT,
+    timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+  );
 `;
 
 export async function initTables() {

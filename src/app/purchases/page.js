@@ -1,165 +1,140 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
-import PostStatusBadge from '@/components/PostStatusBadge';
-import PostActions from '@/components/PostActions';
-import PrintInvoice from '@/components/PrintInvoice';
 import { formatCurrency } from '@/lib/currency';
-import { withUser } from '@/lib/api-client';
+import { getStoredUser } from '@/lib/api-client';
+import { Package, Plus, Edit, Trash2, Eye } from 'lucide-react';
 
-export default function PurchasesPage() {
+export default function Purchases() {
   const [purchases, setPurchases] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [user, setUser] = useState(null);
-  const [printingRecord, setPrintingRecord] = useState(null);
-  const [settings, setSettings] = useState({});
-  
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [selectedPurchase, setSelectedPurchase] = useState(null);
   const [formData, setFormData] = useState({
     supplierId: '',
-    supplierName: '',
-    date: new Date().toISOString().split('T')[0],
-    items: [{ productId: '', qty: 1, price: 0 }],
+    suppliername: '',
+    date: new Date().toISOString().slice(0, 10),
+    total: 0,
     paidAmount: 0,
-    notes: ''
+    items: [],
   });
 
-  const fetchData = async () => {
+  useEffect(() => {
+    setUser(getStoredUser());
+    fetchPurchases();
+  }, []);
+
+  const fetchPurchases = useCallback(async () => {
     setLoading(true);
     try {
-      const [purRes, supRes, prodRes] = await Promise.all([
-        fetch('/api/purchases'),
-        fetch('/api/suppliers'),
-        fetch('/api/products')
-      ]);
-      
-      const purData = await purRes.json();
-      const supData = await supRes.json();
-      const prodData = await prodRes.json();
-      
-      setPurchases(purData.purchases || []);
-      setSuppliers(supData.suppliers || []);
-      setProducts(prodData.products || []);
+      const res = await fetch('/api/purchases');
+      const data = await res.json();
+      setPurchases(data.purchases || []);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    const load = async () => {
-      const storedUser = localStorage.getItem('erp_user');
-      if (storedUser) setUser(JSON.parse(storedUser));
-      
-      const storedSettings = localStorage.getItem('erp_settings');
-      if (storedSettings) setSettings(JSON.parse(storedSettings));
-      
-      await fetchData();
-    };
-
-    load();
   }, []);
-
-  const addItem = () => {
-    setFormData({
-      ...formData,
-      items: [...formData.items, { productId: '', qty: 1, price: 0 }]
-    });
-  };
-
-  const removeItem = (index) => {
-    const newItems = formData.items.filter((_, i) => i !== index);
-    setFormData({ ...formData, items: newItems });
-  };
-
-  const updateItem = (index, field, value) => {
-    const newItems = [...formData.items];
-    newItems[index][field] = value;
-    
-    // Auto-fill price when product is selected
-    if (field === 'productId' && value) {
-      const product = products.find(p => p.id === value);
-      if (product) {
-        newItems[index].price = product.purchasePrice;
-      }
-    }
-    
-    setFormData({ ...formData, items: newItems });
-  };
-
-  const calculateTotal = () => {
-    return formData.items.reduce((sum, item) => sum + (item.price * item.qty), 0);
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    const supplier = suppliers.find(s => s.id === formData.supplierId);
-    const total = calculateTotal();
-    
     try {
-      const res = await fetch('/api/purchases', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(withUser({
-          ...formData,
-          supplierName: supplier ? supplier.name : '',
-          total,
-          items: formData.items.map(item => {
-            const product = products.find(p => p.id === item.productId);
-            return {
-              productId: item.productId,
-              productName: product ? product.name : '',
-              qty: parseInt(item.qty),
-              price: parseFloat(item.price),
-              total: parseFloat(item.price) * parseInt(item.qty)
-            };
-          })
-        }))
+      const method = editingId ? 'PUT' : 'POST';
+      const payload = { ...formData, ...(editingId && { id: editingId }) };
+      const res = await fetch('/api/purchases', { method, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error(await res.text());
+      fetchPurchases();
+      setShowModal(false);
+      setEditingId(null);
+      setFormData({
+        supplierId: '',
+        suppliername: '',
+        date: new Date().toISOString().slice(0, 10),
+        total: 0,
+        paidAmount: 0,
+        items: [],
       });
-      
-      if (res.ok) {
-        setIsModalOpen(false);
-        fetchData();
-      } else {
-        const data = await res.json();
-        alert(data.error || 'حدث خطأ');
-      }
+      alert('تم بنجاح');
     } catch (error) {
-      alert('خطأ في الاتصال');
+      alert('خطأ: ' + error.message);
     }
   };
 
+  const handleDelete = async (id) => {
+    if (!confirm('هل أنت متأكد من الحذف؟')) return;
+    try {
+      const res = await fetch(`/api/purchases?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await res.text());
+      fetchPurchases();
+      alert('تم الحذف بنجاح');
+    } catch (error) {
+      alert('خطأ: ' + error.message);
+    }
+  };
+
+  const openEdit = (purchase) => {
+    setEditingId(purchase.id);
+    setFormData({
+      supplierId: purchase.supplierId,
+      suppliername: purchase.suppliername,
+      date: purchase.date,
+      total: purchase.total,
+      paidAmount: purchase.paidAmount || 0,
+      items: purchase.items || [],
+    });
+    setShowModal(true);
+  };
+
   const columns = [
-    { header: 'رقم الفاتورة', accessor: 'id' },
+    { header: 'رقم الفاتورة', accessor: 'id', render: (row) => <span className="font-bold text-blue-600">{row.id}</span> },
     { header: 'التاريخ', accessor: 'date' },
-    { header: 'المورد', accessor: 'supplierName' },
-    { 
-      header: 'الإجمالي', 
-      accessor: 'total',
-      render: (row) => <span style={{fontWeight: 'bold'}}>{formatCurrency(row.total)}</span>
-    },
-    { header: 'الترحيل', render: (row) => <PostStatusBadge record={row} /> },
-    { header: 'المدفوع', accessor: 'paidAmount', render: (row) => formatCurrency(row.paidAmount) },
-    { header: 'المتبقي', accessor: (row) => formatCurrency(row.total - row.paidAmount) },
+    { header: 'المورد', accessor: 'suppliername' },
+    { header: 'المبلغ', accessor: 'total', render: (row) => formatCurrency(row.total) },
+    { header: 'المدفوع', accessor: 'paidAmount', render: (row) => formatCurrency(row.paidAmount || 0) },
+    { header: 'المتبقي', render: (row) => <span className="text-orange-600 font-bold">{formatCurrency((row.total || 0) - (row.paidAmount || 0))}</span> },
     {
-      header: 'إجراءات',
+      header: 'الحالة',
       render: (row) => (
-        <div className="flex items-center gap-2">
-          <PostActions entity="purchases" record={row} onPosted={fetchData} />
-          <button 
-            className="btn btn-secondary text-xs px-2 py-1" 
-            onClick={() => setPrintingRecord(row)}
-            title="طباعة الفاتورة"
+        <div className="flex flex-col gap-1">
+          <span className={`px-2 py-1 rounded text-xs font-bold ${row.paidAmount >= row.total ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            {row.paidAmount >= row.total ? '✅ مدفوع' : '❌ متبقي'}
+          </span>
+          <span className={`px-2 py-1 rounded text-xs font-bold ${row.postStatus === 'posted' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
+            {row.postStatus === 'posted' ? '📌 مرحّل' : '⏳ معلق'}
+          </span>
+        </div>
+      ),
+    },
+    {
+      header: 'الإجراءات',
+      render: (row) => (
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setSelectedPurchase(row);
+              setShowDetails(true);
+            }}
+            className="p-1 text-blue-600 hover:bg-blue-100 rounded"
           >
-            🖨️
+            <Eye size={18} />
           </button>
+          {row.postStatus !== 'posted' && (
+            <>
+              <button onClick={() => openEdit(row)} className="p-1 text-orange-600 hover:bg-orange-100 rounded">
+                <Edit size={18} />
+              </button>
+              <button onClick={() => handleDelete(row.id)} className="p-1 text-red-600 hover:bg-red-100 rounded">
+                <Trash2 size={18} />
+              </button>
+            </>
+          )}
         </div>
       ),
     },
@@ -169,176 +144,132 @@ export default function PurchasesPage() {
     <AuthGuard allowedRoles={['admin', 'accountant']}>
       <div className="page-header animate-slide">
         <div>
-          <h1 className="page-title">إدارة المشتريات</h1>
-          <p className="page-subtitle">إنشاء ومتابعة فواتير الشراء وإضافة المنتجات للمخزون</p>
+          <h1 className="page-title">📦 فواتير المشتريات</h1>
+          <p className="page-subtitle">إدارة وتتبع جميع عمليات الشراء</p>
         </div>
+        <button
+          onClick={() => {
+            setEditingId(null);
+            setFormData({
+              supplierId: '',
+              suppliername: '',
+              date: new Date().toISOString().slice(0, 10),
+              total: 0,
+              paidAmount: 0,
+              items: [],
+            });
+            setShowModal(true);
+          }}
+          className="btn-primary flex gap-2"
+        >
+          <Plus size={20} /> فاتورة جديدة
+        </button>
       </div>
 
       {loading ? (
-        <div className="loading-spinner"><div className="spinner"></div></div>
+        <div className="flex justify-center py-16">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent"></div>
+        </div>
       ) : (
-        <DataTable 
-          title="سجل فواتير الشراء" 
-          columns={columns} 
+        <DataTable
+          title="قائمة الفواتير"
+          columns={columns}
           data={purchases}
-          actions={
-            <button className="btn btn-primary" onClick={() => {
-              setFormData({
-                supplierId: '',
-                supplierName: '',
-                date: new Date().toISOString().split('T')[0],
-                items: [{ productId: '', qty: 1, price: 0 }],
-                paidAmount: 0,
-                notes: ''
-              });
-              setIsModalOpen(true);
-            }}>
-              + إنشاء فاتورة شراء
-            </button>
-          }
+          searchable={true}
+          emptyMessage="لا توجد فواتير شراء مسجلة"
         />
       )}
 
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        title="إنشاء فاتورة شراء جديدة"
-        size="large"
-      >
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">المورد</label>
-            <select 
-              className="form-select"
-              value={formData.supplierId} 
-              onChange={e => setFormData({...formData, supplierId: e.target.value})}
+      <Modal isOpen={showModal} title={editingId ? 'تعديل الفاتورة' : 'فاتورة جديدة'} onClose={() => setShowModal(false)}>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="form-label">اسم المورد</label>
+            <input
+              type="text"
               required
-            >
-              <option value="">-- اختر المورد --</option>
-              {suppliers.map(s => (
-                <option key={s.id} value={s.id}>{s.name} (الرصيد: {formatCurrency(s.balance)})</option>
-              ))}
-            </select>
+              value={formData.suppliername}
+              onChange={(e) => setFormData({ ...formData, suppliername: e.target.value })}
+              className="form-input"
+            />
           </div>
-          
-          <div className="form-group">
+          <div>
             <label className="form-label">التاريخ</label>
-            <input 
-              type="date" 
-              className="form-input" 
-              value={formData.date} 
-              onChange={e => setFormData({...formData, date: e.target.value})}
+            <input
+              type="date"
               required
+              value={formData.date}
+              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              className="form-input"
             />
           </div>
-
-          <div style={{ marginTop: '20px', marginBottom: '10px' }}>
-            <h4 style={{ marginBottom: '10px' }}>المنتجات</h4>
-            {formData.items.map((item, index) => (
-              <div key={index} className="form-row" style={{ marginBottom: '10px', alignItems: 'flex-end' }}>
-                <div className="form-group" style={{ flex: 2 }}>
-                  <label className="form-label">المنتج</label>
-                  <select 
-                    className="form-select"
-                    value={item.productId} 
-                    onChange={e => updateItem(index, 'productId', e.target.value)}
-                    required
-                  >
-                    <option value="">-- اختر المنتج --</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} - {formatCurrency(p.purchasePrice)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">الكمية</label>
-                  <input 
-                    type="number" 
-                    min="1"
-                    className="form-input" 
-                    value={item.qty} 
-                    onChange={e => updateItem(index, 'qty', e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">سعر الشراء</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    className="form-input" 
-                    value={item.price} 
-                    onChange={e => updateItem(index, 'price', e.target.value)}
-                    required
-                  />
-                </div>
-                {formData.items.length > 1 && (
-                  <button type="button" className="btn btn-danger" onClick={() => removeItem(index)}>×</button>
-                )}
-              </div>
-            ))}
-            <button type="button" className="btn btn-secondary" onClick={addItem} style={{ marginTop: '10px' }}>
-              + إضافة منتج
-            </button>
-          </div>
-
-          <div className="form-group" style={{ marginTop: '20px' }}>
-            <label className="form-label">المبلغ المدفوع (د.ع)</label>
-            <input 
-              type="number" 
+          <div>
+            <label className="form-label">المبلغ الإجمالي</label>
+            <input
+              type="number"
               step="0.01"
-              min="0"
-              className="form-input" 
-              value={formData.paidAmount} 
-              onChange={e => setFormData({...formData, paidAmount: parseFloat(e.target.value) || 0})}
+              required
+              value={formData.total}
+              onChange={(e) => setFormData({ ...formData, total: parseFloat(e.target.value) })}
+              className="form-input"
             />
           </div>
-
-          <div style={{ marginTop: '20px', padding: '15px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', fontWeight: 'bold', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
-              <span>الإجمالي النهائي:</span>
-              <span style={{ color: 'var(--primary)' }}>{formatCurrency(calculateTotal())}</span>
-            </div>
+          <div>
+            <label className="form-label">المبلغ المدفوع</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.paidAmount || 0}
+              onChange={(e) => setFormData({ ...formData, paidAmount: parseFloat(e.target.value) })}
+              className="form-input"
+            />
           </div>
-          
-          <div className="form-group" style={{ marginTop: '20px' }}>
-            <label className="form-label">ملاحظات</label>
-            <textarea 
-              className="form-textarea" 
-              value={formData.notes} 
-              onChange={e => setFormData({...formData, notes: e.target.value})}
-              placeholder="أي ملاحظات إضافية..."
-            ></textarea>
-          </div>
-          
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>إلغاء</button>
-            <button type="submit" className="btn btn-primary">حفظ الفاتورة</button>
+          <div className="flex gap-3 pt-4">
+            <button type="submit" className="btn-primary flex-1">
+              {editingId ? 'حفظ التعديلات' : 'إنشاء الفاتورة'}
+            </button>
+            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary flex-1">
+              إلغاء
+            </button>
           </div>
         </form>
       </Modal>
 
-      {printingRecord && (
-        <div className="fixed inset-0 z-50 bg-gray-500 bg-opacity-75 overflow-y-auto">
-          <div className="min-h-screen px-4 text-center">
-            <div className="fixed inset-0" onClick={() => setPrintingRecord(null)}></div>
-            <span className="inline-block h-screen align-middle" aria-hidden="true">&#8203;</span>
-            <div className="inline-block w-full max-w-4xl p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl relative">
-              <button 
-                onClick={() => setPrintingRecord(null)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-500 print-hide"
-              >
-                <span className="sr-only">Close</span>
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-              <PrintInvoice record={printingRecord} type="purchases" settings={settings} />
+      {showDetails && selectedPurchase && (
+        <Modal isOpen={showDetails} title={`تفاصيل الفاتورة ${selectedPurchase.id}`} onClose={() => setShowDetails(false)}>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-600">المورد</p>
+                <p className="font-bold text-gray-900">{selectedPurchase.suppliername}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">التاريخ</p>
+                <p className="font-bold text-gray-900">{selectedPurchase.date}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">المبلغ الإجمالي</p>
+                <p className="font-bold text-green-600">{formatCurrency(selectedPurchase.total)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">المدفوع</p>
+                <p className="font-bold text-blue-600">{formatCurrency(selectedPurchase.paidAmount || 0)}</p>
+              </div>
             </div>
+            {selectedPurchase.items && selectedPurchase.items.length > 0 && (
+              <div>
+                <h4 className="font-bold mb-2">المنتجات:</h4>
+                <div className="space-y-2">
+                  {selectedPurchase.items.map((item, i) => (
+                    <div key={i} className="flex justify-between text-sm border-b pb-2">
+                      <span>{item.productName}</span>
+                      <span>{item.qty} × {formatCurrency(item.price)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
     </AuthGuard>
   );

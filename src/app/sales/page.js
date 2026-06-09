@@ -1,182 +1,143 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
-import PostStatusBadge from '@/components/PostStatusBadge';
-import PostActions from '@/components/PostActions';
-import PrintInvoice from '@/components/PrintInvoice';
 import { formatCurrency } from '@/lib/currency';
-import { withUser } from '@/lib/api-client';
+import { getStoredUser } from '@/lib/api-client';
+import { ShoppingCart, Plus, Edit, Trash2, Eye } from 'lucide-react';
 
-export default function SalesPage() {
+export default function Sales() {
   const [sales, setSales] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [user, setUser] = useState(null);
-  const [printingRecord, setPrintingRecord] = useState(null);
-  const [settings, setSettings] = useState({});
-  
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [selectedSale, setSelectedSale] = useState(null);
   const [formData, setFormData] = useState({
     customerId: '',
     customerName: '',
-    date: new Date().toISOString().split('T')[0],
-    items: [{ productId: '', qty: 1, price: 0 }],
-    discount: 0,
+    date: new Date().toISOString().slice(0, 10),
+    total: 0,
     paidAmount: 0,
     paymentStatus: 'unpaid',
-    notes: ''
+    items: [],
   });
 
-  const fetchData = async () => {
+  useEffect(() => {
+    setUser(getStoredUser());
+    fetchSales();
+  }, []);
+
+  const fetchSales = useCallback(async () => {
     setLoading(true);
     try {
-      const [salesRes, custRes, prodRes] = await Promise.all([
-        fetch('/api/sales'),
-        fetch('/api/customers'),
-        fetch('/api/products')
-      ]);
-      
-      const salesData = await salesRes.json();
-      const custData = await custRes.json();
-      const prodData = await prodRes.json();
-      
-      setSales(salesData.sales || []);
-      setCustomers(custData.customers || []);
-      setProducts(prodData.products || []);
+      const res = await fetch('/api/sales');
+      const data = await res.json();
+      setSales(data.sales || []);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    const load = async () => {
-      const storedUser = localStorage.getItem('erp_user');
-      if (storedUser) setUser(JSON.parse(storedUser));
-      
-      const storedSettings = localStorage.getItem('erp_settings');
-      if (storedSettings) setSettings(JSON.parse(storedSettings));
-      
-      await fetchData();
-    };
-
-    load();
   }, []);
-
-  const addItem = () => {
-    setFormData({
-      ...formData,
-      items: [...formData.items, { productId: '', qty: 1, price: 0 }]
-    });
-  };
-
-  const removeItem = (index) => {
-    const newItems = formData.items.filter((_, i) => i !== index);
-    setFormData({ ...formData, items: newItems });
-  };
-
-  const updateItem = (index, field, value) => {
-    const newItems = [...formData.items];
-    newItems[index][field] = value;
-    
-    // Auto-fill price when product is selected
-    if (field === 'productId' && value) {
-      const product = products.find(p => p.id === value);
-      if (product) {
-        newItems[index].price = product.sellPrice;
-      }
-    }
-    
-    setFormData({ ...formData, items: newItems });
-  };
-
-  const calculateTotal = () => {
-    return formData.items.reduce((sum, item) => sum + (item.price * item.qty), 0);
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    const customer = customers.find(c => c.id === formData.customerId);
-    const total = calculateTotal();
-    
     try {
-      const res = await fetch('/api/sales', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(withUser({
-          ...formData,
-          customerName: customer ? customer.name : '',
-          total: total - formData.discount,
-          repId: user?.id,
-          repName: user?.fullName,
-          items: formData.items.map(item => {
-            const product = products.find(p => p.id === item.productId);
-            return {
-              productId: item.productId,
-              productName: product ? product.name : '',
-              qty: parseInt(item.qty),
-              price: parseFloat(item.price),
-              total: parseFloat(item.price) * parseInt(item.qty)
-            };
-          })
-        }))
+      const method = editingId ? 'PUT' : 'POST';
+      const payload = { ...formData, ...(editingId && { id: editingId }) };
+      const res = await fetch('/api/sales', { method, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error(await res.text());
+      fetchSales();
+      setShowModal(false);
+      setEditingId(null);
+      setFormData({
+        customerId: '',
+        customerName: '',
+        date: new Date().toISOString().slice(0, 10),
+        total: 0,
+        paidAmount: 0,
+        paymentStatus: 'unpaid',
+        items: [],
       });
-      
-      if (res.ok) {
-        setIsModalOpen(false);
-        fetchData();
-      } else {
-        const data = await res.json();
-        alert(data.error || 'حدث خطأ');
-      }
+      alert('تم بنجاح');
     } catch (error) {
-      alert('خطأ في الاتصال');
+      alert('خطأ: ' + error.message);
     }
   };
 
+  const handleDelete = async (id) => {
+    if (!confirm('هل أنت متأكد من الحذف؟')) return;
+    try {
+      const res = await fetch(`/api/sales?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await res.text());
+      fetchSales();
+      alert('تم الحذف بنجاح');
+    } catch (error) {
+      alert('خطأ: ' + error.message);
+    }
+  };
+
+  const openEdit = (sale) => {
+    setEditingId(sale.id);
+    setFormData({
+      customerId: sale.customerId,
+      customerName: sale.customerName,
+      date: sale.date,
+      total: sale.total,
+      paidAmount: sale.paidAmount || 0,
+      paymentStatus: sale.paymentStatus,
+      items: sale.items || [],
+    });
+    setShowModal(true);
+  };
+
   const columns = [
-    { header: 'رقم الفاتورة', accessor: 'id' },
+    { header: 'رقم الفاتورة', accessor: 'id', render: (row) => <span className="font-bold text-blue-600">{row.id}</span> },
     { header: 'التاريخ', accessor: 'date' },
     { header: 'العميل', accessor: 'customerName' },
-    { header: 'المندوب', accessor: 'repName' },
-    { 
-      header: 'الإجمالي', 
-      accessor: 'total',
-      render: (row) => <span style={{fontWeight: 'bold'}}>{formatCurrency(row.total)}</span>
+    { header: 'المبلغ', accessor: 'total', render: (row) => formatCurrency(row.total) },
+    { header: 'المدفوع', accessor: 'paidAmount', render: (row) => formatCurrency(row.paidAmount || 0) },
+    { header: 'المتبقي', render: (row) => <span className="text-red-600 font-bold">{formatCurrency((row.total || 0) - (row.paidAmount || 0))}</span> },
+    {
+      header: 'الحالة',
+      render: (row) => (
+        <div className="flex flex-col gap-1">
+          <span className={`px-2 py-1 rounded text-xs font-bold ${row.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            {row.paymentStatus === 'paid' ? '✅ مدفوع' : '❌ غير مدفوع'}
+          </span>
+          <span className={`px-2 py-1 rounded text-xs font-bold ${row.postStatus === 'posted' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
+            {row.postStatus === 'posted' ? '📌 مرحّل' : '⏳ معلق'}
+          </span>
+        </div>
+      ),
     },
     {
-      header: 'الترحيل',
-      render: (row) => <PostStatusBadge record={row} />,
-    },
-    { 
-      header: 'الحالة', 
-      accessor: 'paymentStatus',
+      header: 'الإجراءات',
       render: (row) => (
-        <span className={`badge ${row.paymentStatus === 'paid' ? 'badge-success' : row.paymentStatus === 'partial' ? 'badge-warning' : 'badge-danger'}`}>
-          {row.paymentStatus === 'paid' ? 'مدفوع' : row.paymentStatus === 'partial' ? 'مدفوع جزئياً' : 'غير مدفوع'}
-        </span>
-      )
-    },
-    { header: 'المبلغ المدفوع', accessor: 'paidAmount', render: (row) => formatCurrency(row.paidAmount) },
-    { header: 'المتبقي', accessor: (row) => formatCurrency(row.total - row.paidAmount) },
-    {
-      header: 'إجراءات',
-      render: (row) => (
-        <div className="flex items-center gap-2">
-          <PostActions entity="sales" record={row} onPosted={fetchData} />
-          <button 
-            className="btn btn-secondary text-xs px-2 py-1" 
-            onClick={() => setPrintingRecord(row)}
-            title="طباعة الفاتورة"
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setSelectedSale(row);
+              setShowDetails(true);
+            }}
+            className="p-1 text-blue-600 hover:bg-blue-100 rounded"
           >
-            🖨️
+            <Eye size={18} />
           </button>
+          {row.postStatus !== 'posted' && (
+            <>
+              <button onClick={() => openEdit(row)} className="p-1 text-orange-600 hover:bg-orange-100 rounded">
+                <Edit size={18} />
+              </button>
+              <button onClick={() => handleDelete(row.id)} className="p-1 text-red-600 hover:bg-red-100 rounded">
+                <Trash2 size={18} />
+              </button>
+            </>
+          )}
         </div>
       ),
     },
@@ -186,213 +147,141 @@ export default function SalesPage() {
     <AuthGuard allowedRoles={['admin', 'accountant', 'rep']}>
       <div className="page-header animate-slide">
         <div>
-          <h1 className="page-title">إدارة المبيعات</h1>
-          <p className="page-subtitle">إنشاء ومتابعة فواتير البيع والمبالغ المحصلة</p>
+          <h1 className="page-title">📊 فواتير المبيعات</h1>
+          <p className="page-subtitle">إدارة وتتبع جميع عمليات البيع</p>
         </div>
+        <button
+          onClick={() => {
+            setEditingId(null);
+            setFormData({
+              customerId: '',
+              customerName: '',
+              date: new Date().toISOString().slice(0, 10),
+              total: 0,
+              paidAmount: 0,
+              paymentStatus: 'unpaid',
+              items: [],
+            });
+            setShowModal(true);
+          }}
+          className="btn-primary flex gap-2"
+        >
+          <Plus size={20} /> فاتورة جديدة
+        </button>
       </div>
 
       {loading ? (
-        <div className="loading-spinner"><div className="spinner"></div></div>
+        <div className="flex justify-center py-16">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent"></div>
+        </div>
       ) : (
-        <DataTable 
-          title="سجل فواتير البيع" 
-          columns={columns} 
+        <DataTable
+          title="قائمة الفواتير"
+          columns={columns}
           data={sales}
-          actions={
-            <button className="btn btn-primary" onClick={() => {
-              setFormData({
-                customerId: '',
-                customerName: '',
-                date: new Date().toISOString().split('T')[0],
-                items: [{ productId: '', qty: 1, price: 0 }],
-                discount: 0,
-                paidAmount: 0,
-                paymentStatus: 'unpaid',
-                notes: ''
-              });
-              setIsModalOpen(true);
-            }}>
-              + إنشاء فاتورة بيع
-            </button>
-          }
+          searchable={true}
+          emptyMessage="لا توجد فواتير بيع مسجلة"
         />
       )}
 
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        title="إنشاء فاتورة بيع جديدة"
-        size="large"
-      >
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">العميل</label>
-            <select 
-              className="form-select"
-              value={formData.customerId} 
-              onChange={e => setFormData({...formData, customerId: e.target.value})}
+      <Modal isOpen={showModal} title={editingId ? 'تعديل الفاتورة' : 'فاتورة جديدة'} onClose={() => setShowModal(false)}>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="form-label">اسم العميل</label>
+            <input
+              type="text"
               required
-            >
-              <option value="">-- اختر العميل --</option>
-              {customers.map(c => (
-                <option key={c.id} value={c.id}>{c.name} (الرصيد: {formatCurrency(c.balance)})</option>
-              ))}
+              value={formData.customerName}
+              onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+              className="form-input"
+            />
+          </div>
+          <div>
+            <label className="form-label">التاريخ</label>
+            <input
+              type="date"
+              required
+              value={formData.date}
+              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              className="form-input"
+            />
+          </div>
+          <div>
+            <label className="form-label">المبلغ الإجمالي</label>
+            <input
+              type="number"
+              step="0.01"
+              required
+              value={formData.total}
+              onChange={(e) => setFormData({ ...formData, total: parseFloat(e.target.value) })}
+              className="form-input"
+            />
+          </div>
+          <div>
+            <label className="form-label">المبلغ المدفوع</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.paidAmount || 0}
+              onChange={(e) => setFormData({ ...formData, paidAmount: parseFloat(e.target.value) })}
+              className="form-input"
+            />
+          </div>
+          <div>
+            <label className="form-label">حالة الدفع</label>
+            <select value={formData.paymentStatus} onChange={(e) => setFormData({ ...formData, paymentStatus: e.target.value })} className="form-input">
+              <option value="unpaid">غير مدفوع</option>
+              <option value="partial">دفعة جزئية</option>
+              <option value="paid">مدفوع بالكامل</option>
             </select>
           </div>
-          
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">التاريخ</label>
-              <input 
-                type="date" 
-                className="form-input" 
-                value={formData.date} 
-                onChange={e => setFormData({...formData, date: e.target.value})}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">حالة الدفع</label>
-              <select 
-                className="form-select"
-                value={formData.paymentStatus} 
-                onChange={e => setFormData({...formData, paymentStatus: e.target.value})}
-              >
-                <option value="unpaid">غير مدفوع</option>
-                <option value="partial">مدفوع جزئياً</option>
-                <option value="paid">مدفوع بالكامل</option>
-              </select>
-            </div>
-          </div>
-
-          <div style={{ marginTop: '20px', marginBottom: '10px' }}>
-            <h4 style={{ marginBottom: '10px' }}>المنتجات</h4>
-            {formData.items.map((item, index) => (
-              <div key={index} className="form-row" style={{ marginBottom: '10px', alignItems: 'flex-end' }}>
-                <div className="form-group" style={{ flex: 2 }}>
-                  <label className="form-label">المنتج</label>
-                  <select 
-                    className="form-select"
-                    value={item.productId} 
-                    onChange={e => updateItem(index, 'productId', e.target.value)}
-                    required
-                  >
-                    <option value="">-- اختر المنتج --</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id} disabled={p.qty <= 0}>
-                        {p.name} - {formatCurrency(p.sellPrice)} {p.qty <= 0 ? '(نفد)' : `(متوفر: ${p.qty})`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">الكمية</label>
-                  <input 
-                    type="number" 
-                    min="1"
-                    className="form-input" 
-                    value={item.qty} 
-                    onChange={e => updateItem(index, 'qty', e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">السعر</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    className="form-input" 
-                    value={item.price} 
-                    onChange={e => updateItem(index, 'price', e.target.value)}
-                    required
-                  />
-                </div>
-                {formData.items.length > 1 && (
-                  <button type="button" className="btn btn-danger" onClick={() => removeItem(index)}>×</button>
-                )}
-              </div>
-            ))}
-            <button type="button" className="btn btn-secondary" onClick={addItem} style={{ marginTop: '10px' }}>
-              + إضافة منتج
+          <div className="flex gap-3 pt-4">
+            <button type="submit" className="btn-primary flex-1">
+              {editingId ? 'حفظ التعديلات' : 'إنشاء الفاتورة'}
             </button>
-          </div>
-
-          <div className="form-row" style={{ marginTop: '20px' }}>
-            <div className="form-group">
-              <label className="form-label">الخصم (د.ع)</label>
-              <input 
-                type="number" 
-                step="0.01"
-                min="0"
-                className="form-input" 
-                value={formData.discount} 
-                onChange={e => setFormData({...formData, discount: parseFloat(e.target.value) || 0})}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">المبلغ المدفوع (د.ع)</label>
-              <input 
-                type="number" 
-                step="0.01"
-                min="0"
-                className="form-input" 
-                value={formData.paidAmount} 
-                onChange={e => setFormData({...formData, paidAmount: parseFloat(e.target.value) || 0})}
-              />
-            </div>
-          </div>
-
-          <div style={{ marginTop: '20px', padding: '15px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-              <span>المجموع:</span>
-              <span style={{ fontWeight: 'bold' }}>{formatCurrency(calculateTotal())}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-              <span>الخصم:</span>
-              <span style={{ color: 'var(--danger)' }}>-{formatCurrency(formData.discount)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', fontWeight: 'bold', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
-              <span>الإجمالي النهائي:</span>
-              <span style={{ color: 'var(--primary)' }}>{formatCurrency(calculateTotal() - formData.discount)}</span>
-            </div>
-          </div>
-          
-          <div className="form-group" style={{ marginTop: '20px' }}>
-            <label className="form-label">ملاحظات</label>
-            <textarea 
-              className="form-textarea" 
-              value={formData.notes} 
-              onChange={e => setFormData({...formData, notes: e.target.value})}
-              placeholder="أي ملاحظات إضافية..."
-            ></textarea>
-          </div>
-          
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>إلغاء</button>
-            <button type="submit" className="btn btn-primary">حفظ الفاتورة</button>
+            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary flex-1">
+              إلغاء
+            </button>
           </div>
         </form>
       </Modal>
 
-      {printingRecord && (
-        <div className="fixed inset-0 z-50 bg-gray-500 bg-opacity-75 overflow-y-auto">
-          <div className="min-h-screen px-4 text-center">
-            <div className="fixed inset-0" onClick={() => setPrintingRecord(null)}></div>
-            <span className="inline-block h-screen align-middle" aria-hidden="true">&#8203;</span>
-            <div className="inline-block w-full max-w-4xl p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl relative">
-              <button 
-                onClick={() => setPrintingRecord(null)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-500 print-hide"
-              >
-                <span className="sr-only">Close</span>
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-              <PrintInvoice record={printingRecord} type="sales" settings={settings} />
+      {showDetails && selectedSale && (
+        <Modal isOpen={showDetails} title={`تفاصيل الفاتورة ${selectedSale.id}`} onClose={() => setShowDetails(false)}>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-600">العميل</p>
+                <p className="font-bold text-gray-900">{selectedSale.customerName}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">التاريخ</p>
+                <p className="font-bold text-gray-900">{selectedSale.date}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">المبلغ الإجمالي</p>
+                <p className="font-bold text-green-600">{formatCurrency(selectedSale.total)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">المدفوع</p>
+                <p className="font-bold text-blue-600">{formatCurrency(selectedSale.paidAmount || 0)}</p>
+              </div>
             </div>
+            {selectedSale.items && selectedSale.items.length > 0 && (
+              <div>
+                <h4 className="font-bold mb-2">المنتجات:</h4>
+                <div className="space-y-2">
+                  {selectedSale.items.map((item, i) => (
+                    <div key={i} className="flex justify-between text-sm border-b pb-2">
+                      <span>{item.productName}</span>
+                      <span>{item.qty} × {formatCurrency(item.price)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
     </AuthGuard>
   );

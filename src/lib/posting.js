@@ -246,6 +246,23 @@ export async function postRecord(entity, id, user) {
     `UPDATE ${table} SET postStatus = ?, postedBy = ?, postedByName = ?, postedAt = ? WHERE id = ?`,
     ['posted', user?.id || null, user?.fullName || null, new Date().toISOString(), id]
   );
+
+  // تسجيل سجل التدقيق
+  const auditId = 'LOG-' + Date.now();
+  await query(
+    `INSERT INTO audit_logs (id, action, entity, recordId, userId, userName, details, timestamp)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      auditId,
+      'ترحيل',
+      entity,
+      id,
+      user?.id || null,
+      user?.fullName || null,
+      `تم ترحيل ${entity} برقم ${id}`,
+      new Date().toISOString()
+    ]
+  );
 }
 
 export async function reverseRecordEffects(entity, id) {
