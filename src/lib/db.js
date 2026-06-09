@@ -4,6 +4,27 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// Load environment variables from .env.local in development
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    const envPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../.env.local');
+    if (fs.existsSync(envPath)) {
+      const envContent = fs.readFileSync(envPath, 'utf8');
+      for (const line of envContent.split('\n')) {
+        if (line.includes('=') && !line.startsWith('#')) {
+          const [key, ...vals] = line.split('=');
+          const val = vals.join('=').replace(/^"|"$/g, '').trim();
+          if (val && !process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to load .env.local:', err.message);
+  }
+}
+
 const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
 const usePostgres = !!connectionString;
 

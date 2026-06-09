@@ -9,7 +9,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'الرجاء إدخال اسم المستخدم وكلمة المرور' }, { status: 400 });
     }
 
-    const result = await query('SELECT id, username, fullName, role FROM users WHERE username = ? AND password = ? AND active = 1', [username, password]);
+    const result = await query('SELECT id, username, fullname, role FROM users WHERE username = ? AND password = ? AND active = 1', [username, password]);
     const row = result.rows[0];
 
     if (!row) {
@@ -19,7 +19,7 @@ export async function POST(request) {
     const user = {
       id: row.id,
       username: row.username,
-      fullName: row.fullname || row.fullName,
+      fullName: row.fullname,
       role: row.role,
     };
 
