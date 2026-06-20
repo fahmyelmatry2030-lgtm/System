@@ -3,6 +3,13 @@ import { NextResponse } from 'next/server';
 import { getUserFromRequest, canModifyRecord, isPosted } from '@/lib/api-auth';
 import { applySaleEffects, reverseSaleEffects, resolveInitialPostStatus } from '@/lib/posting';
 
+function field(record, ...keys) {
+  for (const key of keys) {
+    if (record?.[key] !== undefined && record?.[key] !== null) return record[key];
+  }
+  return null;
+}
+
 export async function GET() {
   try {
     const sales = (await query('SELECT * FROM sales ORDER BY createdAt DESC')).rows;
@@ -23,7 +30,18 @@ export async function POST(request) {
     const data = await request.json();
     const user = getUserFromRequest(data);
     const { customerId, customerName, date, total, paidAmount, paymentStatus, repId, repName, items } = data;
-    const id = 'INV-S' + Date.now();
+    
+    // Get sequential invoice number
+    const lastSale = (await query('SELECT id FROM sales ORDER BY id DESC LIMIT 1')).rows[0];
+    let nextNumber = 1;
+    if (lastSale && lastSale.id) {
+      const match = lastSale.id.match(/INV-S(\d+)$/);
+      if (match) {
+        nextNumber = parseInt(match[1]) + 1;
+      }
+    }
+    const id = 'INV-S' + nextNumber;
+    
     const postStatus = resolveInitialPostStatus(user);
 
     await query(
@@ -45,6 +63,9 @@ export async function POST(request) {
           'INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)',
           [id, item.productId, item.productName, item.qty, item.price, item.qty * item.price]
         );
+        
+        // Deduct quantity from inventory immediately
+        await query('UPDATE products SET qty = qty - ? WHERE id = ?', [item.qty, item.productId]);
       }
     }
 
@@ -74,6 +95,13 @@ export async function PUT(request) {
     const wasPosted = isPosted(existing);
     if (wasPosted) {
       await reverseSaleEffects(id);
+    } else {
+      // Reverse inventory changes for non-posted sales
+      const oldItems = (await query('SELECT * FROM sale_items WHERE saleId = ?', [id])).rows;
+      for (const item of oldItems) {
+        const productId = field(item, 'productId', 'productid');
+        await query('UPDATE products SET qty = qty + ? WHERE id = ?', [item.qty, productId]);
+      }
     }
 
     await query(
@@ -88,6 +116,11 @@ export async function PUT(request) {
           'INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)',
           [id, item.productId, item.productName, item.qty, item.price, item.qty * item.price]
         );
+        
+        // Deduct quantity from inventory immediately for non-posted sales
+        if (!wasPosted) {
+          await query('UPDATE products SET qty = qty - ? WHERE id = ?', [item.qty, item.productId]);
+        }
       }
     }
 
@@ -115,6 +148,13 @@ export async function DELETE(request) {
 
     if (isPosted(existing)) {
       await reverseSaleEffects(id);
+    } else {
+      // Restore inventory for non-posted sales
+      const items = (await query('SELECT * FROM sale_items WHERE saleId = ?', [id])).rows;
+      for (const item of items) {
+        const productId = field(item, 'productId', 'productid');
+        await query('UPDATE products SET qty = qty + ? WHERE id = ?', [item.qty, productId]);
+      }
     }
 
     await query('DELETE FROM sale_items WHERE saleId=?', [id]);

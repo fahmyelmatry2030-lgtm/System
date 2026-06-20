@@ -5,23 +5,34 @@ import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
 import { formatCurrency } from '@/lib/currency';
+import { getStoredUser } from '@/lib/api-client';
 
 export default function InventoryPage() {
   const [data, setData] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [user, setUser] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [nameError, setNameError] = useState('');
+  const [skuError, setSkuError] = useState('');
+  const [priceError, setPriceError] = useState('');
 
   const fetchData = async () => {
     try {
       const res = await fetch('/api/products');
       const json = await res.json();
       setData(json.products || json.data || json || []);
+      
+      // Extract unique categories
+      const uniqueCategories = [...new Set((json.products || json.data || json || []).map(p => p.category).filter(Boolean))];
+      setCategories(uniqueCategories);
     } catch (err) {
       console.error(err);
     }
   };
 
   useEffect(() => {
+    setUser(getStoredUser());
     const load = async () => {
       await fetchData();
     };
@@ -31,11 +42,17 @@ export default function InventoryPage() {
 
   const handleAdd = () => {
     setEditingItem(null);
+    setNameError('');
+    setSkuError('');
+    setPriceError('');
     setIsModalOpen(true);
   };
 
   const handleEdit = (item) => {
     setEditingItem(item);
+    setNameError('');
+    setSkuError('');
+    setPriceError('');
     setIsModalOpen(true);
   };
 
@@ -54,6 +71,33 @@ export default function InventoryPage() {
     e.preventDefault();
     const formData = new FormData(e.target);
     const payload = Object.fromEntries(formData);
+    
+    // Reset errors
+    setNameError('');
+    setSkuError('');
+    setPriceError('');
+
+    // Validate name uniqueness
+    const nameExists = data.some(item => item.name === payload.name && item.id !== editingItem?.id);
+    if (nameExists) {
+      setNameError('اسم المنتج موجود مسبقاً');
+      return;
+    }
+
+    // Validate SKU uniqueness
+    const skuExists = data.some(item => item.sku === payload.sku && item.id !== editingItem?.id);
+    if (skuExists) {
+      setSkuError('رمز المنتج موجود مسبقاً');
+      return;
+    }
+
+    // Validate sell price >= purchase price
+    const purchasePrice = parseFloat(payload.purchasePrice) || 0;
+    const sellPrice = parseFloat(payload.sellPrice) || 0;
+    if (sellPrice < purchasePrice) {
+      setPriceError('سعر البيع لا يمكن أن يكون أقل من سعر الشراء');
+      return;
+    }
     
     try {
       if (editingItem) {
@@ -89,7 +133,11 @@ export default function InventoryPage() {
         </span>
       )
     },
-    { header: 'سعر الشراء', accessor: 'purchasePrice', render: (row) => formatCurrency(row.purchasePrice) },
+    { 
+      header: 'سعر الشراء', 
+      accessor: 'purchasePrice', 
+      render: (row) => user?.role === 'rep' ? '-' : formatCurrency(row.purchasePrice) 
+    },
     { header: 'سعر البيع', accessor: 'sellPrice', render: (row) => formatCurrency(row.sellPrice) },
     { 
       header: 'تاريخ الانتهاء', 
@@ -110,12 +158,27 @@ export default function InventoryPage() {
     },
     { 
       header: 'إجراءات', 
-      render: (item) => (
-        <div className="flex gap-2">
-          <button onClick={() => handleEdit(item)} className="text-blue-500 hover:underline">تعديل</button>
-          <button onClick={() => handleDelete(item.id)} className="text-red-500 hover:underline">حذف</button>
-        </div>
-      )
+      render: (item) => {
+        const isRep = user?.role === 'rep';
+        return (
+          <div className="flex gap-2">
+            <button 
+              onClick={() => handleEdit(item)} 
+              className={isRep ? 'text-gray-400 cursor-not-allowed' : 'text-blue-500 hover:underline'}
+              disabled={isRep}
+            >
+              تعديل
+            </button>
+            <button 
+              onClick={() => handleDelete(item.id)} 
+              className={isRep ? 'text-gray-400 cursor-not-allowed' : 'text-red-500 hover:underline'}
+              disabled={isRep}
+            >
+              حذف
+            </button>
+          </div>
+        );
+      }
     }
   ];
 
@@ -133,9 +196,11 @@ export default function InventoryPage() {
         columns={columns} 
         data={data}
         actions={
-          <button className="btn btn-primary" onClick={handleAdd}>
-            + إضافة منتج
-          </button>
+          user?.role !== 'rep' && (
+            <button className="btn btn-primary" onClick={handleAdd}>
+              + إضافة منتج
+            </button>
+          )
         }
       />
 
@@ -143,25 +208,39 @@ export default function InventoryPage() {
         <form onSubmit={handleSave} className="flex flex-col gap-4">
           <div>
             <label className="form-label">اسم المنتج</label>
-            <input name="name" defaultValue={editingItem?.name || ''} required className="form-input" />
+            <input 
+              name="name" 
+              defaultValue={editingItem?.name || ''} 
+              required 
+              className={`form-input ${nameError ? 'border-red-500' : ''}`} 
+            />
+            {nameError && <p className="text-red-500 text-sm mt-1">{nameError}</p>}
           </div>
           <div>
             <label className="form-label">رمز المنتج (SKU)</label>
-            <input name="sku" defaultValue={editingItem?.sku || ''} className="form-input" />
+            <input 
+              name="sku" 
+              defaultValue={editingItem?.sku || ''} 
+              className={`form-input ${skuError ? 'border-red-500' : ''}`} 
+            />
+            {skuError && <p className="text-red-500 text-sm mt-1">{skuError}</p>}
           </div>
           <div>
             <label className="form-label">الفئة</label>
-            <input name="category" defaultValue={editingItem?.category || ''} className="form-input" />
+            <select 
+              name="category" 
+              defaultValue={editingItem?.category || ''} 
+              className="form-input"
+            >
+              <option value="">اختر الفئة أو أدخل فئة جديدة</option>
+              {categories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
           </div>
-          <div className="form-row">
-            <div>
-              <label className="form-label">الكمية</label>
-              <input name="qty" type="number" defaultValue={editingItem?.qty || 0} required className="form-input" />
-            </div>
-            <div>
-              <label className="form-label">حد الطلب</label>
-              <input name="threshold" type="number" defaultValue={editingItem?.threshold || 5} className="form-input" />
-            </div>
+          <div>
+            <label className="form-label">الكمية</label>
+            <input name="qty" type="number" defaultValue={editingItem?.qty || 0} required className="form-input" />
           </div>
           <div className="form-row">
             <div>
@@ -170,7 +249,15 @@ export default function InventoryPage() {
             </div>
             <div>
               <label className="form-label">سعر البيع (د.ع)</label>
-              <input name="sellPrice" type="number" step="0.01" defaultValue={editingItem?.sellPrice || 0} required className="form-input" />
+              <input 
+                name="sellPrice" 
+                type="number" 
+                step="0.01" 
+                defaultValue={editingItem?.sellPrice || 0} 
+                required 
+                className={`form-input ${priceError ? 'border-red-500' : ''}`} 
+              />
+              {priceError && <p className="text-red-500 text-sm mt-1">{priceError}</p>}
             </div>
           </div>
           <div>
