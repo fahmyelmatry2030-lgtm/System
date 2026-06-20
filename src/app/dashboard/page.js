@@ -57,6 +57,18 @@ export default async function Dashboard() {
   const today = new Date().toISOString().split('T')[0];
   const expiredCount = products.filter(p => p.expiryDate && p.expiryDate < today).length;
 
+  // Get current date and time in Iraq timezone (UTC+3)
+  const iraqDateTime = new Date().toLocaleString('ar-IQ', { 
+    timeZone: 'Asia/Baghdad',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  });
+
   // Low stock
   const lowStockCount = products.filter(p => p.qty <= p.threshold).length;
 
@@ -73,6 +85,9 @@ export default async function Dashboard() {
           <span className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm shadow-sm">📊</span>
           لوحة القيادة
         </h2>
+        <div className="text-sm text-gray-600 font-semibold">
+          🕐 {iraqDateTime}
+        </div>
       </div>
 
       <PendingAlert />
