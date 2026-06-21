@@ -5,6 +5,7 @@ import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
 import { formatCurrency } from '@/lib/currency';
+import { getIraqDateISO, formatIraqDate } from '@/lib/date-utils';
 
 export default function CustomersPage() {
   const [data, setData] = useState([]);
@@ -77,23 +78,38 @@ export default function CustomersPage() {
     const payload = Object.fromEntries(formData);
 
     // Validate name uniqueness
-    const existingCustomer = data.find(c => c.name === payload.name && c.id !== editingItem?.id);
+    const existingCustomer = data.find(c => c.name.trim() === payload.name.trim() && c.id !== editingItem?.id);
     if (existingCustomer) {
-      setNameError('اسم العميل مكرر');
+      setNameError('⚠️ اسم العميل مكرر بالفعل');
       return;
     }
 
     // Validate phone number
     const phone = payload.phone.replace(/\s/g, '');
     if (phone.length !== 11 || !phone.startsWith('07')) {
-      setPhoneError('رقم الموبايل يجب أن يكون 11 رقم ويبدأ بـ 07');
+      setPhoneError('⚠️ رقم الموبايل يجب أن يكون 11 رقم ويبدأ بـ 07 (مثل: 07701357183)');
       return;
     }
 
     // Format phone number automatically
-    payload.phone = phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3');
+    const formattedPhone = phone.replace(/(\d{3})(\d{3})(.+)/, '$1 $2 $3');
+    payload.phone = formattedPhone;
+    
+    // Add creation date if new customer
+    if (!editingItem) {
+      payload.createdAt = getIraqDateISO();
+    }
 
     try {
+      const user = JSON.parse(localStorage.getItem('erp_user') || '{}');
+      const isRep = user.role === 'rep';
+      
+      // Prevent reps from editing customers
+      if (isRep && editingItem) {
+        alert('⛔ لا توجد صلاحية لتعديل العميل');
+        return;
+      }
+      
       if (editingItem) {
         await fetch('/api/customers', {
           method: 'PUT',
@@ -107,10 +123,13 @@ export default function CustomersPage() {
           body: JSON.stringify(payload),
         });
       }
+      setNameError('');
+      setPhoneError('');
       setIsModalOpen(false);
       fetchData();
     } catch (err) {
       console.error(err);
+      alert('حدث خطأ في الحفظ');
     }
   };
 
@@ -131,8 +150,11 @@ export default function CustomersPage() {
       header: 'تاريخ الإضافة',
       accessor: 'createdAt',
       render: (row) => {
-        const date = new Date(row.createdAt);
-        return isNaN(date.getTime()) ? '-' : date.toLocaleDateString('ar-EG');
+        try {
+          return formatIraqDate(row.createdAt);
+        } catch {
+          return '-';
+        }
       },
     },
     {
@@ -145,16 +167,18 @@ export default function CustomersPage() {
           <div className="flex items-center gap-2">
             <button 
               onClick={() => handleEdit(row)} 
-              className={isRep ? 'text-gray-400 cursor-not-allowed' : 'text-blue-500 hover:underline'}
+              className={`transition-all ${isRep ? 'text-gray-300 cursor-not-allowed opacity-50' : 'text-blue-500 hover:underline cursor-pointer'}`}
               disabled={isRep}
+              title={isRep ? 'لا توجد صلاحية للتعديل' : 'تعديل العميل'}
             >
               تعديل
             </button>
             <a href={`/customers/${row.id}`} className="text-green-600 hover:underline">كشف حساب</a>
             <button 
               onClick={() => handleDelete(row.id)} 
-              className={isRep || isAccountant ? 'text-gray-300 cursor-not-allowed' : 'text-red-500 hover:underline'}
+              className={`transition-all ${isRep || isAccountant ? 'text-gray-300 cursor-not-allowed opacity-50' : 'text-red-500 hover:underline cursor-pointer'}`}
               disabled={isRep || isAccountant}
+              title={isRep || isAccountant ? 'لا توجد صلاحية للحذف' : 'حذف العميل'}
             >
               حذف
             </button>
@@ -184,39 +208,52 @@ export default function CustomersPage() {
         }
       />
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? 'تعديل عميل' : 'إضافة عميل جديد'}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? '✏️ تعديل عميل' : '➕ إضافة عميل جديد'}>
         <form onSubmit={handleSave} className="flex flex-col gap-4">
           <div>
-            <label className="form-label">اسم العميل</label>
+            <label className="form-label">اسم العميل 👤</label>
             <input 
               name="name" 
               defaultValue={editingItem?.name || ''} 
               required 
-              className={`form-input ${nameError ? 'border-red-500' : ''}`}
+              className={`form-input border-2 transition-colors ${nameError ? 'border-red-500 bg-red-50' : 'border-gray-300 focus:border-blue-500'}`}
               onChange={() => setNameError('')}
+              maxLength="50"
             />
-            {nameError && <p className="text-red-500 text-sm mt-1">{nameError}</p>}
+            {nameError && <p className="text-red-600 text-sm mt-1 font-semibold">{nameError}</p>}
           </div>
           <div>
-            <label className="form-label">رقم الهاتف</label>
+            <label className="form-label">رقم الهاتف 📱</label>
             <input 
               name="phone" 
               defaultValue={editingItem?.phone || ''} 
-              className={`form-input ${phoneError ? 'border-red-500' : ''}`}
+              placeholder="07 XXX XXX XXXX"
+              className={`form-input border-2 transition-colors ${phoneError ? 'border-red-500 bg-red-50' : 'border-gray-300 focus:border-blue-500'}`}
               onChange={(e) => {
-                const value = e.target.value.replace(/\s/g, '');
-                if (value.length <= 11) {
-                  const formatted = value.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3');
+                let value = e.target.value.replace(/\s/g, '');
+                if (value.length > 11) {
+                  value = value.substring(0, 11);
+                }
+                // Auto-format the phone number
+                if (value.length >= 3) {
+                  const part1 = value.substring(0, 3);
+                  const part2 = value.substring(3, 6);
+                  const part3 = value.substring(6, 11);
+                  const formatted = part1 + (part2 ? ' ' + part2 : '') + (part3 ? ' ' + part3 : '');
                   e.target.value = formatted;
+                } else {
+                  e.target.value = value;
                 }
                 setPhoneError('');
               }}
+              maxLength="14"
             />
-            {phoneError && <p className="text-red-500 text-sm mt-1">{phoneError}</p>}
+            {phoneError && <p className="text-red-600 text-sm mt-1 font-semibold">{phoneError}</p>}
+            <p className="text-xs text-gray-500 mt-1">✏️ سيتم تنسيق الرقم تلقائياً: (0807 237 0772)</p>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-secondary">إلغاء</button>
-            <button type="submit" className="btn btn-primary">حفظ</button>
+            <button type="submit" className="btn btn-primary">💾 حفظ</button>
           </div>
         </form>
       </Modal>

@@ -5,6 +5,7 @@ import AuthGuard from '@/components/AuthGuard';
 import PrintInvoice from '@/components/PrintInvoice';
 import { formatCurrency } from '@/lib/currency';
 import { withUser } from '@/lib/api-client';
+import { getIraqDateISO } from '@/lib/date-utils';
 
 export default function POSPage() {
   const [products, setProducts] = useState([]);
@@ -113,6 +114,8 @@ export default function POSPage() {
 
   const displaySearchError = searchError || (searchQuery && filteredProducts.length === 0 ? 'المنتج غير موجود' : '');
 
+  const searchInputBorderColor = displaySearchError ? 'border-red-500 bg-red-50' : 'border-gray-200';
+
   const updateCartQty = (id, newQty) => {
     if (newQty < 1) return;
     const product = products.find(p => p.id === id);
@@ -140,7 +143,7 @@ export default function POSPage() {
     const payload = {
       customerId: customer.id,
       customerName: customer.name,
-      date: new Date().toISOString().split('T')[0],
+      date: getIraqDateISO(),
       items: cart.map(item => ({
         productId: item.id,
         productName: item.name,
@@ -223,6 +226,9 @@ export default function POSPage() {
                 />
                 <span className="absolute right-3 top-3.5 text-gray-400">🔍</span>
               </div>
+              {displaySearchError && (
+                <p className="mt-2 text-sm text-red-600 font-bold">{displaySearchError}</p>
+              )}
             </form>
             <div className="relative flex-1">
               <input 
@@ -268,33 +274,43 @@ export default function POSPage() {
           </div>
 
           <div className="p-4 border-b border-gray-100 relative">
-            <label className="block mb-2 text-sm font-semibold text-gray-700">بحث العميل</label>
-            <input
-              type="text"
-              value={customerQuery}
-              onChange={(e) => {
-                setCustomerQuery(e.target.value);
-                setShowCustomerSuggestions(true);
-              }}
-              onFocus={() => setShowCustomerSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 150)}
-              placeholder="اكتب اسم العميل..."
-              className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
-            />
-            {showCustomerSuggestions && customerSuggestions.length > 0 && (
-              <div className="absolute left-4 right-4 mt-2 max-h-40 overflow-y-auto bg-white border-2 border-blue-200 rounded-xl shadow-lg z-20">
-                {customerSuggestions.map(c => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onMouseDown={() => handleSelectCustomer(c)}
-                    className="w-full text-right px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
-                  >
-                    <div className="font-semibold text-gray-800">{c.name}</div>
-                    <div className="text-xs text-gray-500">{c.phone || 'لا يوجد رقم هاتف'}</div>
-                  </button>
-                ))}
-              </div>
+            <label className="block mb-2 text-sm font-semibold text-gray-700">اختر العميل 👤</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={customerQuery}
+                onChange={(e) => {
+                  setCustomerQuery(e.target.value);
+                  setShowCustomerSuggestions(true);
+                }}
+                onFocus={() => setShowCustomerSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 200)}
+                placeholder="اكتب اسم العميل للبحث..."
+                className={`w-full px-4 py-3 border-2 ${!customerId && customerQuery === '' ? 'border-gray-200' : customerId ? 'border-green-500 bg-green-50' : 'border-blue-300'} rounded-xl focus:outline-none focus:border-blue-500 bg-white font-semibold transition-colors`}
+              />
+              {showCustomerSuggestions && customerSuggestions.length > 0 && (
+                <div className="absolute left-4 right-4 mt-2 max-h-48 overflow-y-auto bg-white border-2 border-blue-300 rounded-xl shadow-lg z-20">
+                  {customerSuggestions.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onMouseDown={() => handleSelectCustomer(c)}
+                      className="w-full text-right px-4 py-3 hover:bg-blue-100 border-b border-gray-100 last:border-b-0 transition-colors"
+                    >
+                      <div className="font-bold text-gray-800">{c.name}</div>
+                      <div className="text-xs text-gray-500">📱 {c.phone || 'لا يوجد رقم هاتف'}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {customerQuery && customerSuggestions.length === 0 && (
+                <div className="absolute left-4 right-4 mt-2 bg-red-50 border-2 border-red-300 rounded-xl p-3 z-20 text-right">
+                  <p className="text-sm text-red-600 font-semibold">❌ لا توجد عملاء بهذا الاسم</p>
+                </div>
+              )}
+            </div>
+            {customerId && (
+              <p className="mt-2 text-sm text-green-600 font-semibold">✅ تم اختيار: {customerQuery}</p>
             )}
           </div>
 
@@ -330,51 +346,51 @@ export default function POSPage() {
           </div>
 
           <div className="bg-gray-50 p-4 border-t border-gray-200 rounded-b-2xl">
-            <div className="space-y-3 mb-4">
-              <div className="flex justify-between items-center text-sm text-gray-600">
-                <span>المجموع:</span>
-                <span className="font-bold">{formatCurrency(calculateTotal())}</span>
+            <div className="space-y-3 mb-4 bg-white p-4 rounded-xl border border-gray-200">
+              <div className="flex justify-between items-center p-2 bg-blue-50 rounded-lg">
+                <span className="text-sm font-semibold text-gray-700">المجموع الفرعي:</span>
+                <span className="font-bold text-blue-600 text-lg">{formatCurrency(calculateTotal())}</span>
               </div>
-              <div className="flex justify-between items-center text-sm">
-                <span>الخصم:</span>
+              <div className="flex justify-between items-center p-2 bg-orange-50 rounded-lg">
+                <span className="text-sm font-semibold text-gray-700">الخصم:</span>
                 <input 
                   type="number" 
-                  className="w-24 px-2 py-1 border border-gray-200 rounded text-left" 
+                  className="w-28 px-2 py-1 border-2 border-orange-300 rounded-lg text-left font-bold" 
                   value={discount} 
                   onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)} 
                 />
               </div>
-              <div className="flex justify-between items-center text-sm">
-                <span>المدفوع:</span>
+              <div className="flex justify-between items-center p-2 bg-green-50 rounded-lg">
+                <span className="text-sm font-semibold text-gray-700">المدفوع:</span>
                 <input 
                   type="number" 
-                  className="w-24 px-2 py-1 border border-gray-200 rounded text-left" 
+                  className="w-28 px-2 py-1 border-2 border-green-300 rounded-lg text-left font-bold" 
                   value={paidAmount} 
                   onChange={(e) => setPaidAmount(parseFloat(e.target.value) || 0)} 
                 />
               </div>
-              <div className="flex justify-between items-center text-sm">
-                <span>نوع الدفع:</span>
+              <div className="flex justify-between items-center p-2 bg-purple-50 rounded-lg">
+                <span className="text-sm font-semibold text-gray-700">نوع الدفع:</span>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-36 px-2 py-1 border border-gray-200 rounded text-right"
+                  className="w-32 px-2 py-1 border-2 border-purple-300 rounded-lg text-right font-semibold"
                 >
-                  <option value="cash">نقدي</option>
-                  <option value="credit">قرض</option>
+                  <option value="cash">💰 نقدي</option>
+                  <option value="credit">📝 قرض</option>
                 </select>
               </div>
-              <div className="flex justify-between items-center pt-3 border-t border-gray-200 text-lg font-bold text-blue-600">
+              <div className="flex justify-between items-center p-3 border-t-2 border-gray-200 pt-4 text-lg font-bold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg">
                 <span>الإجمالي النهائي:</span>
                 <span>{formatCurrency(finalTotal)}</span>
               </div>
             </div>
             <button 
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleCheckout}
-              disabled={saving || cart.length === 0}
+              disabled={saving || cart.length === 0 || !customerId}
             >
-              {saving ? 'جاري الدفع...' : 'إتمام الدفع'} 💰
+              {saving ? '⏳ جاري الدفع...' : '💰 إتمام الدفع'} 
             </button>
             {invoiceRecord && (
               <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-right">
