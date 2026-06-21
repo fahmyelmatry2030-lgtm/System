@@ -96,12 +96,8 @@ export default function ReturnsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    const entity = formData.type === 'supplier' 
-      ? suppliers.find(s => s.id === formData.entityId)
-      : customers.find(c => c.id === formData.entityId);
-    
-    if (!entity) {
-      alert('يرجى اختيار الطرف المناسب');
+    if (!formData.entityName || formData.entityName.trim() === '') {
+      alert('يرجى إدخال اسم الطرف المسترجع');
       return;
     }
     
@@ -111,7 +107,6 @@ export default function ReturnsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(withUser({
           ...formData,
-          entityName: entity.name,
           total: calculateTotal(),
           items: formData.items.map(item => {
             const product = products.find(p => p.id === item.productId);
@@ -236,25 +231,15 @@ export default function ReturnsPage() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">
-              {formData.type === 'supplier' ? 'المورد' : 'العميل'}
-            </label>
-            <select 
-              className="form-select"
-              value={formData.entityId} 
-              onChange={e => setFormData({...formData, entityId: e.target.value})}
+            <label className="form-label">الطرف المسترجع</label>
+            <input 
+              type="text" 
+              className="form-input" 
+              placeholder="اكتب اسم الطرف المسترجع"
+              value={formData.entityName} 
+              onChange={e => setFormData({...formData, entityName: e.target.value})}
               required
-            >
-              <option value="">-- اختر {formData.type === 'supplier' ? 'المورد' : 'العميل'} --</option>
-              {formData.type === 'supplier' 
-                ? suppliers.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))
-                : customers.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))
-              }
-            </select>
+            />
           </div>
           
           <div className="form-group">

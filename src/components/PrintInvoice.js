@@ -37,11 +37,13 @@ export default function PrintInvoice({ record, type = 'sales', settings }) {
         <h2 className="text-xl text-gray-500 mt-2">{title}</h2>
       </div>
 
-      <div className="flex justify-between mb-8">
-        <div>
-          <p className="text-gray-600 mb-1">رقم الفاتورة: <span className="font-bold text-gray-900">{record.id}</span></p>
-          <p className="text-gray-600 mb-1">التاريخ: <span className="font-bold text-gray-900">{record.date}</span></p>
+      <div className="flex flex-col gap-4 lg:flex-row justify-between mb-8">
+        <div className="space-y-2">
+          <p className="text-gray-600">رقم الفاتورة: <span className="font-bold text-gray-900">{record.id}</span></p>
+          <p className="text-gray-600">التاريخ: <span className="font-bold text-gray-900">{record.date}</span></p>
           <p className="text-gray-600">البائع/المندوب: <span className="font-bold text-gray-900">{record.repName || 'غير محدد'}</span></p>
+          <p className="text-gray-600">الهاتف: <span className="font-bold text-gray-900">{record.customerPhone || 'غير متوفر'}</span></p>
+          <p className="text-gray-600">طريقة الدفع: <span className="font-bold text-gray-900">{record.paymentMethod === 'credit' ? 'قرض' : 'نقدي'}</span></p>
         </div>
         <div className="text-left bg-gray-50 p-4 rounded-lg">
           <p className="text-gray-600 mb-1">{entityLabel}:</p>
@@ -52,7 +54,8 @@ export default function PrintInvoice({ record, type = 'sales', settings }) {
       <table className="w-full mb-8 text-right border-collapse">
         <thead>
           <tr className="bg-gray-100 text-gray-700">
-            <th className="p-3 border border-gray-200 rounded-tr-lg">المنتج</th>
+            <th className="p-3 border border-gray-200 rounded-tr-lg">#</th>
+            <th className="p-3 border border-gray-200">المنتج</th>
             <th className="p-3 border border-gray-200">الكمية</th>
             <th className="p-3 border border-gray-200">سعر الوحدة</th>
             <th className="p-3 border border-gray-200 rounded-tl-lg">الإجمالي</th>
@@ -61,6 +64,7 @@ export default function PrintInvoice({ record, type = 'sales', settings }) {
         <tbody>
           {record.items && record.items.map((item, idx) => (
             <tr key={idx} className="border-b border-gray-100">
+              <td className="p-3 border-x border-gray-200 text-center">{idx + 1}</td>
               <td className="p-3 border-x border-gray-200">{item.productName}</td>
               <td className="p-3 border-x border-gray-200 text-center">{item.qty}</td>
               <td className="p-3 border-x border-gray-200">{formatCurrency(item.price)}</td>
@@ -93,6 +97,10 @@ export default function PrintInvoice({ record, type = 'sales', settings }) {
           <div className="flex justify-between mt-1 text-sm text-gray-500">
             <span>المتبقي:</span>
             <span className="text-red-500 font-bold">{formatCurrency(record.total - (record.paidAmount || 0))}</span>
+          </div>
+          <div className="flex justify-between mt-2 text-sm text-gray-500">
+            <span>السداد:</span>
+            <span className="font-semibold text-gray-900">{record.paymentMethod === 'credit' ? 'قرض' : 'نقدي'}</span>
           </div>
         </div>
       </div>

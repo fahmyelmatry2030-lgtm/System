@@ -150,6 +150,7 @@ export default function SuppliersPage() {
             <label className="form-label">رقم الهاتف</label>
             <input name="phone" defaultValue={editingItem?.phone || ''} className="form-input" />
           </div>
+          <input type="hidden" name="balance" value={editingItem?.balance || 0} />
           <div className="flex justify-end gap-2 mt-4">
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-secondary">إلغاء</button>
             <button type="submit" className="btn btn-primary">حفظ</button>

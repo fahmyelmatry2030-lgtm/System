@@ -15,7 +15,7 @@ export async function POST(request) {
     const data = await request.json();
     const id = 'S' + Date.now();
     
-    await query('INSERT INTO suppliers (id, name, phone, email, balance) VALUES (?,?,?,?,?)', [id, data.name, data.phone || null, data.email || null, data.balance || 0]);
+    await query('INSERT INTO suppliers (id, name, phone, balance) VALUES (?,?,?,?)', [id, data.name, data.phone || null, data.balance || 0]);
     
     return NextResponse.json({ success: true, id });
   } catch (error) {
@@ -26,10 +26,10 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     const data = await request.json();
-    const { id, name, phone, email, balance } = data;
+    const { id, name, phone, balance } = data;
     if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
 
-    await query('UPDATE suppliers SET name=?, phone=?, email=?, balance=? WHERE id=?', [name, phone || null, email || null, balance || 0, id]);
+    await query('UPDATE suppliers SET name=?, phone=?, balance=? WHERE id=?', [name, phone || null, balance || 0, id]);
     
     return NextResponse.json({ success: true, id });
   } catch (error) {

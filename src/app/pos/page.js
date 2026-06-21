@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import AuthGuard from '@/components/AuthGuard';
+import PrintInvoice from '@/components/PrintInvoice';
 import { formatCurrency } from '@/lib/currency';
 import { withUser } from '@/lib/api-client';
 
@@ -11,11 +12,17 @@ export default function POSPage() {
   const [cart, setCart] = useState([]);
   const [barcodeInput, setBarcodeInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [customerQuery, setCustomerQuery] = useState('');
   const [customerId, setCustomerId] = useState('');
   const [discount, setDiscount] = useState(0);
   const [paidAmount, setPaidAmount] = useState(0);
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [searchError, setSearchError] = useState('');
+  const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
   const [user, setUser] = useState(null);
+  const [invoiceRecord, setInvoiceRecord] = useState(null);
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
   
   const barcodeRef = useRef(null);
 
@@ -45,35 +52,66 @@ export default function POSPage() {
   const handleBarcodeSubmit = (e) => {
     e.preventDefault();
     if (!barcodeInput) return;
-    
+
     const product = products.find(p => p.sku === barcodeInput || p.id === barcodeInput);
-    if (product) {
-      addToCart(product);
+    if (!product) {
+      setSearchError('المنتج غير موجود');
+    } else if (product.qty <= 0) {
+      setSearchError('الكمية نفدت من المخزون');
     } else {
-      alert('المنتج غير موجود');
+      setSearchError('');
+      addToCart(product);
     }
+
     setBarcodeInput('');
     barcodeRef.current?.focus();
   };
 
   const addToCart = (product) => {
     if (product.qty <= 0) {
-      alert('الكمية نفدت من المخزون');
+      setSearchError('الكمية نفدت من المخزون');
       return;
     }
-    
+
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
         if (existing.qty >= product.qty) {
-          alert('لا يوجد رصيد كافٍ من هذا المنتج');
+          setSearchError('لا يوجد رصيد كافٍ من هذا المنتج');
           return prev;
         }
         return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item);
       }
-      return [...prev, { ...product, qty: 1, price: product.sellPrice }];
+      return [...prev, { ...product, qty: 1, price: product.sellPrice, total: product.sellPrice }];
     });
   };
+
+  const handleSelectCustomer = (customer) => {
+    setCustomerId(customer.id);
+    setCustomerQuery(customer.name);
+    setShowCustomerSuggestions(false);
+  };
+
+  const handleProductClick = (product) => {
+    if (product.qty <= 0) {
+      setSearchError('الكمية نفدت من المخزون');
+      return;
+    }
+    setSearchError('');
+    addToCart(product);
+  };
+
+  const customerSuggestions = customerQuery
+    ? customers.filter(c => c.name.toLowerCase().startsWith(customerQuery.toLowerCase()))
+    : [];
+
+  const filteredProducts = products.filter(p => 
+    p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (p.sku && p.sku.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (p.category && p.category.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  const displaySearchError = searchError || (searchQuery && filteredProducts.length === 0 ? 'المنتج غير موجود' : '');
 
   const updateCartQty = (id, newQty) => {
     if (newQty < 1) return;
@@ -82,7 +120,7 @@ export default function POSPage() {
       alert('الكمية المطلوبة أكبر من المخزون');
       return;
     }
-    setCart(prev => prev.map(item => item.id === id ? { ...item, qty: newQty } : item));
+    setCart(prev => prev.map(item => item.id === id ? { ...item, qty: newQty, total: item.price * newQty } : item));
   };
 
   const removeFromCart = (id) => {
@@ -111,6 +149,7 @@ export default function POSPage() {
       })),
       discount: discount,
       paidAmount: paidAmount,
+      paymentMethod,
       paymentStatus: paidAmount >= finalTotal ? 'paid' : paidAmount > 0 ? 'partial' : 'unpaid',
       notes: 'تم البيع عبر نقطة البيع (POS)'
     };
@@ -122,16 +161,40 @@ export default function POSPage() {
         body: JSON.stringify(withUser(payload))
       });
       if (res.ok) {
+        const result = await res.json();
+        const record = {
+          id: result.id,
+          date: payload.date,
+          customerName: customer.name,
+          customerPhone: customer.phone || 'غير متوفر',
+          items: cart.map(item => ({
+            productName: item.name,
+            qty: item.qty,
+            price: item.price,
+            total: item.qty * item.price
+          })),
+          total: calculateTotal(),
+          discount,
+          paidAmount,
+          paymentStatus: payload.paymentStatus,
+          paymentMethod,
+          cashOrCredit: paymentMethod === 'cash' ? 'نقدي' : 'قرض'
+        };
+
+        setInvoiceRecord(record);
         alert('تم تسجيل عملية البيع بنجاح!');
         setCart([]);
         setDiscount(0);
         setPaidAmount(0);
         setCustomerId('');
+        setCustomerQuery('');
+        setSearchError('');
         // Refresh products to update inventory
         const prodData = await fetch('/api/products').then(r => r.json());
         setProducts(prodData.products || []);
       } else {
         const err = await res.json();
+        setSaveError(err.error || 'حدث خطأ');
         alert(err.error || 'حدث خطأ');
       }
     } catch (err) {
@@ -140,19 +203,13 @@ export default function POSPage() {
     setSaving(false);
   };
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (p.sku && p.sku.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (p.category && p.category.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
   return (
     <AuthGuard allowedRoles={['admin', 'rep']}>
       <div className="h-[calc(100vh-80px)] flex gap-4 overflow-hidden -m-4 p-4 bg-gray-50">
         
         {/* Left Side: Products Grid */}
         <div className="flex-1 flex flex-col h-full bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100 bg-white z-10 flex gap-4">
+          <div className="p-4 border-b border-gray-100 bg-white z-10 grid gap-4 sm:grid-cols-[1fr_1.5fr]">
             <form onSubmit={handleBarcodeSubmit} className="flex-1">
               <div className="relative">
                 <input 
@@ -161,19 +218,27 @@ export default function POSPage() {
                   value={barcodeInput}
                   onChange={(e) => setBarcodeInput(e.target.value)}
                   placeholder="مرر الباركود هنا أو أدخله يدوياً..."
-                  className="w-full pl-4 pr-10 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                  className={`w-full pl-4 pr-10 py-3 rounded-xl border-2 ${displaySearchError ? 'border-red-500 bg-red-50' : 'border-gray-200'} focus:outline-none focus:ring-2 ${displaySearchError ? 'focus:ring-red-400' : 'focus:ring-blue-500'} bg-gray-50`}
                   autoFocus
                 />
                 <span className="absolute right-3 top-3.5 text-gray-400">🔍</span>
               </div>
             </form>
-            <input 
-              type="text" 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ابحث بالاسم أو الفئة..."
-              className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-            />
+            <div className="relative flex-1">
+              <input 
+                type="text" 
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setSearchError('');
+                }}
+                placeholder="ابحث بالاسم أو الفئة..."
+                className={`w-full px-4 py-3 rounded-xl border-2 ${displaySearchError ? 'border-red-500 bg-red-50' : 'border-gray-200'} focus:outline-none focus:ring-2 ${displaySearchError ? 'focus:ring-red-400' : 'focus:ring-blue-500'} bg-gray-50`}
+              />
+              {displaySearchError && (
+                <p className="mt-2 text-sm text-red-600 font-bold">{displaySearchError}</p>
+              )}
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
@@ -202,17 +267,35 @@ export default function POSPage() {
             <span className="bg-blue-600 px-2 py-1 rounded-lg text-sm">{cart.length} منتج</span>
           </div>
 
-          <div className="p-4 border-b border-gray-100">
-            <select 
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
-              value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-            >
-              <option value="">-- اختر العميل --</option>
-              {customers.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+          <div className="p-4 border-b border-gray-100 relative">
+            <label className="block mb-2 text-sm font-semibold text-gray-700">بحث العميل</label>
+            <input
+              type="text"
+              value={customerQuery}
+              onChange={(e) => {
+                setCustomerQuery(e.target.value);
+                setShowCustomerSuggestions(true);
+              }}
+              onFocus={() => setShowCustomerSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 150)}
+              placeholder="اكتب اسم العميل..."
+              className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+            />
+            {showCustomerSuggestions && customerSuggestions.length > 0 && (
+              <div className="absolute left-4 right-4 mt-2 max-h-40 overflow-y-auto bg-white border-2 border-blue-200 rounded-xl shadow-lg z-20">
+                {customerSuggestions.map(c => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onMouseDown={() => handleSelectCustomer(c)}
+                    className="w-full text-right px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                  >
+                    <div className="font-semibold text-gray-800">{c.name}</div>
+                    <div className="text-xs text-gray-500">{c.phone || 'لا يوجد رقم هاتف'}</div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto p-2">
@@ -224,18 +307,21 @@ export default function POSPage() {
             ) : (
               <ul className="space-y-2">
                 {cart.map(item => (
-                  <li key={item.id} className="bg-gray-50 p-3 rounded-lg flex justify-between items-center border border-gray-100">
-                    <div className="flex-1">
-                      <h4 className="font-bold text-sm text-gray-800 truncate">{item.name}</h4>
-                      <p className="text-xs text-blue-600 font-bold">{formatCurrency(item.price)}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg overflow-hidden">
-                        <button className="px-2 py-1 bg-gray-100 hover:bg-gray-200" onClick={() => updateCartQty(item.id, item.qty + 1)}>+</button>
-                        <span className="w-8 text-center text-sm font-bold">{item.qty}</span>
-                        <button className="px-2 py-1 bg-gray-100 hover:bg-gray-200" onClick={() => updateCartQty(item.id, item.qty - 1)}>-</button>
+                  <li key={item.id} className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex-1">
+                        <h4 className="font-bold text-sm text-gray-800 truncate">{item.name}</h4>
+                        <p className="text-xs text-gray-500 mt-1">سعر الوحدة: {formatCurrency(item.price)}</p>
+                        <p className="text-xs text-gray-500">الإجمالي: {formatCurrency(item.total || item.price * item.qty)}</p>
                       </div>
-                      <button className="text-red-500 hover:text-red-700" onClick={() => removeFromCart(item.id)}>🗑️</button>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg overflow-hidden">
+                          <button className="px-2 py-1 bg-gray-100 hover:bg-gray-200" onClick={() => updateCartQty(item.id, item.qty + 1)}>+</button>
+                          <span className="w-8 text-center text-sm font-bold">{item.qty}</span>
+                          <button className="px-2 py-1 bg-gray-100 hover:bg-gray-200" onClick={() => updateCartQty(item.id, item.qty - 1)}>-</button>
+                        </div>
+                        <button className="text-red-500 hover:text-red-700" onClick={() => removeFromCart(item.id)}>🗑️</button>
+                      </div>
                     </div>
                   </li>
                 ))}
@@ -267,6 +353,17 @@ export default function POSPage() {
                   onChange={(e) => setPaidAmount(parseFloat(e.target.value) || 0)} 
                 />
               </div>
+              <div className="flex justify-between items-center text-sm">
+                <span>نوع الدفع:</span>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-36 px-2 py-1 border border-gray-200 rounded text-right"
+                >
+                  <option value="cash">نقدي</option>
+                  <option value="credit">قرض</option>
+                </select>
+              </div>
               <div className="flex justify-between items-center pt-3 border-t border-gray-200 text-lg font-bold text-blue-600">
                 <span>الإجمالي النهائي:</span>
                 <span>{formatCurrency(finalTotal)}</span>
@@ -279,10 +376,30 @@ export default function POSPage() {
             >
               {saving ? 'جاري الدفع...' : 'إتمام الدفع'} 💰
             </button>
+            {invoiceRecord && (
+              <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-right">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-semibold text-blue-700">الفاتورة جاهزة للطباعة</p>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-3 py-2 bg-blue-600 text-white rounded-xl text-sm"
+                  >
+                    طباعة الفاتورة
+                  </button>
+                </div>
+                <p className="text-sm text-blue-700 mt-2">رقم الفاتورة: {invoiceRecord.id}</p>
+              </div>
+            )}
           </div>
         </div>
 
       </div>
+      {invoiceRecord && (
+        <div className="mt-6">
+          <PrintInvoice record={invoiceRecord} />
+        </div>
+      )}
     </AuthGuard>
   );
 }
