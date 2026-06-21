@@ -53,7 +53,7 @@ export default function Header({ user }) {
   };
 
   return (
-    <header className="h-[76px] flex items-center justify-between px-8 bg-[#f8f9fd] sticky top-0 z-10 w-full">
+    <header className="h-[76px] flex items-center justify-between px-8 bg-white/80 backdrop-blur-md sticky top-0 z-10 w-full border-b border-gray-200">
       <button className="p-2.5 bg-white rounded-xl shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-gray-100 text-gray-500 hover:text-gray-700 transition-colors">
         <Menu size={20} />
       </button>

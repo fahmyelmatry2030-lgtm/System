@@ -14,7 +14,7 @@ export default function CustomerStatementPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`/api/customers/statement?id=${id}`);
+        const res = await fetch(`/api/customers/statement?customerId=${id}`);
         const result = await res.json();
         setData(result);
       } catch (error) {
@@ -33,6 +33,10 @@ export default function CustomerStatementPage() {
 
   if (loading) return <div className="loading-spinner"><div className="spinner"></div></div>;
   if (!data?.customer) return <div className="text-center mt-20 text-red-500">العميل غير موجود</div>;
+  if (!data?.sales && !data?.collections) {
+    data.sales = [];
+    data.collections = [];
+  }
 
   // Aggregate and sort timeline
   const timeline = [];
