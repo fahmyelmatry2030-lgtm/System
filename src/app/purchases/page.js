@@ -10,24 +10,28 @@ import { Package, Plus, Edit, Trash2, Eye } from 'lucide-react';
 
 export default function Purchases() {
   const [purchases, setPurchases] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [selectedPurchase, setSelectedPurchase] = useState(null);
+  const [supplierSearch, setSupplierSearch] = useState('');
   const [formData, setFormData] = useState({
     supplierId: '',
     suppliername: '',
     date: new Date().toISOString().slice(0, 10),
     total: 0,
     paidAmount: 0,
+    notes: '',
     items: [],
   });
 
   useEffect(() => {
     setUser(getStoredUser());
     fetchPurchases();
+    fetchSuppliers();
   }, []);
 
   const fetchPurchases = useCallback(async () => {
@@ -42,6 +46,16 @@ export default function Purchases() {
       setLoading(false);
     }
   }, []);
+
+  const fetchSuppliers = async () => {
+    try {
+      const res = await fetch('/api/suppliers');
+      const data = await res.json();
+      setSuppliers(data.suppliers || []);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -81,12 +95,14 @@ export default function Purchases() {
 
   const openEdit = (purchase) => {
     setEditingId(purchase.id);
+    setSupplierSearch(purchase.suppliername);
     setFormData({
       supplierId: purchase.supplierId,
       suppliername: purchase.suppliername,
       date: purchase.date,
       total: purchase.total,
       paidAmount: purchase.paidAmount || 0,
+      notes: purchase.notes || '',
       items: purchase.items || [],
     });
     setShowModal(true);
@@ -150,12 +166,14 @@ export default function Purchases() {
         <button
           onClick={() => {
             setEditingId(null);
+            setSupplierSearch('');
             setFormData({
               supplierId: '',
               suppliername: '',
               date: new Date().toISOString().slice(0, 10),
               total: 0,
               paidAmount: 0,
+              notes: '',
               items: [],
             });
             setShowModal(true);
@@ -187,10 +205,25 @@ export default function Purchases() {
             <input
               type="text"
               required
-              value={formData.suppliername}
-              onChange={(e) => setFormData({ ...formData, suppliername: e.target.value })}
+              value={supplierSearch}
+              onChange={(e) => {
+                setSupplierSearch(e.target.value);
+                const supplier = suppliers.find(s => s.name === e.target.value);
+                if (supplier) {
+                  setFormData({ ...formData, supplierId: supplier.id, suppliername: supplier.name });
+                } else {
+                  setFormData({ ...formData, suppliername: e.target.value });
+                }
+              }}
               className="form-input"
+              placeholder="ابحث عن المورد..."
+              list="suppliers-list"
             />
+            <datalist id="suppliers-list">
+              {suppliers.filter(s => s.name.toLowerCase().includes(supplierSearch.toLowerCase())).map(s => (
+                <option key={s.id} value={s.name} />
+              ))}
+            </datalist>
           </div>
           <div>
             <label className="form-label">التاريخ</label>
@@ -221,6 +254,15 @@ export default function Purchases() {
               value={formData.paidAmount || 0}
               onChange={(e) => setFormData({ ...formData, paidAmount: parseFloat(e.target.value) })}
               className="form-input"
+            />
+          </div>
+          <div>
+            <label className="form-label">ملاحظات</label>
+            <textarea
+              value={formData.notes || ''}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              className="form-textarea"
+              rows="3"
             />
           </div>
           <div className="flex gap-3 pt-4">

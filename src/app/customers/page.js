@@ -13,6 +13,8 @@ export default function CustomersPage() {
   const [statementOpen, setStatementOpen] = useState(false);
   const [statement, setStatement] = useState(null);
   const [statementLoading, setStatementLoading] = useState(false);
+  const [nameError, setNameError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
 
   const fetchData = async () => {
     try {
@@ -35,6 +37,8 @@ export default function CustomersPage() {
   const handleAdd = () => {
     setEditingItem(null);
     setIsModalOpen(true);
+    setNameError('');
+    setPhoneError('');
   };
 
   const handleEdit = (item) => {
@@ -72,6 +76,23 @@ export default function CustomersPage() {
     const formData = new FormData(e.target);
     const payload = Object.fromEntries(formData);
 
+    // Validate name uniqueness
+    const existingCustomer = data.find(c => c.name === payload.name && c.id !== editingItem?.id);
+    if (existingCustomer) {
+      setNameError('اسم العميل مكرر');
+      return;
+    }
+
+    // Validate phone number
+    const phone = payload.phone.replace(/\s/g, '');
+    if (phone.length !== 11 || !phone.startsWith('07')) {
+      setPhoneError('رقم الموبايل يجب أن يكون 11 رقم ويبدأ بـ 07');
+      return;
+    }
+
+    // Format phone number automatically
+    payload.phone = phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3');
+
     try {
       if (editingItem) {
         await fetch('/api/customers', {
@@ -94,31 +115,52 @@ export default function CustomersPage() {
   };
 
   const columns = [
+    { header: '#', render: (_, index) => index + 1 },
     { header: 'اسم العميل', accessor: 'name' },
     { header: 'رقم الهاتف', accessor: 'phone' },
     {
-      header: 'المديونية',
+      header: 'الرصيد',
       accessor: 'balance',
       render: (row) => (
-        <span style={{ fontWeight: 'bold', color: row.balance > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-          {formatCurrency(row.balance)}
+        <span style={{ fontWeight: 'bold', color: row.balance < 0 ? '#ef4444' : row.balance > 0 ? '#22c55e' : '#6b7280' }}>
+          {formatCurrency(Math.abs(row.balance))}
         </span>
       ),
     },
     {
       header: 'تاريخ الإضافة',
       accessor: 'createdAt',
-      render: (row) => new Date(row.createdAt).toLocaleDateString('ar-EG'),
+      render: (row) => {
+        const date = new Date(row.createdAt);
+        return isNaN(date.getTime()) ? '-' : date.toLocaleDateString('ar-EG');
+      },
     },
     {
       header: 'إجراءات',
-      render: (row) => (
-        <div className="flex items-center gap-2">
-          <button onClick={() => handleEdit(row)} className="text-blue-500 hover:underline">تعديل</button>
-          <a href={`/customers/${row.id}`} className="text-green-600 hover:underline">كشف حساب</a>
-          <button onClick={() => handleDelete(row.id)} className="text-red-500 hover:underline">حذف</button>
-        </div>
-      ),
+      render: (row) => {
+        const user = JSON.parse(localStorage.getItem('erp_user') || '{}');
+        const isRep = user.role === 'rep';
+        const isAccountant = user.role === 'accountant';
+        return (
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => handleEdit(row)} 
+              className={isRep ? 'text-gray-400 cursor-not-allowed' : 'text-blue-500 hover:underline'}
+              disabled={isRep}
+            >
+              تعديل
+            </button>
+            <a href={`/customers/${row.id}`} className="text-green-600 hover:underline">كشف حساب</a>
+            <button 
+              onClick={() => handleDelete(row.id)} 
+              className={isRep || isAccountant ? 'text-gray-300 cursor-not-allowed' : 'text-red-500 hover:underline'}
+              disabled={isRep || isAccountant}
+            >
+              حذف
+            </button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -146,15 +188,31 @@ export default function CustomersPage() {
         <form onSubmit={handleSave} className="flex flex-col gap-4">
           <div>
             <label className="form-label">اسم العميل</label>
-            <input name="name" defaultValue={editingItem?.name || ''} required className="form-input" />
+            <input 
+              name="name" 
+              defaultValue={editingItem?.name || ''} 
+              required 
+              className={`form-input ${nameError ? 'border-red-500' : ''}`}
+              onChange={() => setNameError('')}
+            />
+            {nameError && <p className="text-red-500 text-sm mt-1">{nameError}</p>}
           </div>
           <div>
             <label className="form-label">رقم الهاتف</label>
-            <input name="phone" defaultValue={editingItem?.phone || ''} className="form-input" />
-          </div>
-          <div>
-            <label className="form-label">الرصيد الافتتاحي (د.ع)</label>
-            <input name="balance" type="number" step="0.01" defaultValue={editingItem?.balance || 0} className="form-input" />
+            <input 
+              name="phone" 
+              defaultValue={editingItem?.phone || ''} 
+              className={`form-input ${phoneError ? 'border-red-500' : ''}`}
+              onChange={(e) => {
+                const value = e.target.value.replace(/\s/g, '');
+                if (value.length <= 11) {
+                  const formatted = value.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3');
+                  e.target.value = formatted;
+                }
+                setPhoneError('');
+              }}
+            />
+            {phoneError && <p className="text-red-500 text-sm mt-1">{phoneError}</p>}
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-secondary">إلغاء</button>

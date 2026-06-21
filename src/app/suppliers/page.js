@@ -5,11 +5,13 @@ import AuthGuard from '@/components/AuthGuard';
 import DataTable from '@/components/DataTable';
 import Modal from '@/components/Modal';
 import { formatCurrency } from '@/lib/currency';
+import { getStoredUser } from '@/lib/api-client';
 
 export default function SuppliersPage() {
   const [data, setData] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [user, setUser] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -22,6 +24,7 @@ export default function SuppliersPage() {
   };
 
   useEffect(() => {
+    setUser(getStoredUser());
     const load = async () => {
       await fetchData();
     };
@@ -77,31 +80,43 @@ export default function SuppliersPage() {
   };
 
   const columns = [
+    { header: '#', render: (_, index) => index + 1 },
     { header: 'اسم المورد', accessor: 'name' },
     { header: 'رقم الهاتف', accessor: 'phone' },
-    { header: 'البريد الإلكتروني', accessor: 'email' },
     { 
       header: 'الرصيد', 
       accessor: 'balance',
       render: (row) => (
-        <span style={{ fontWeight: 'bold', color: row.balance > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-          {formatCurrency(row.balance)}
+        <span style={{ fontWeight: 'bold', color: row.balance < 0 ? '#ef4444' : row.balance > 0 ? '#22c55e' : '#6b7280' }}>
+          {formatCurrency(Math.abs(row.balance))}
         </span>
       )
     },
     { 
       header: 'تاريخ الإضافة', 
       accessor: 'createdAt',
-      render: (row) => new Date(row.createdAt).toLocaleDateString('ar-EG')
+      render: (row) => {
+        const date = new Date(row.createdAt);
+        return isNaN(date.getTime()) ? '-' : date.toLocaleDateString('ar-EG');
+      },
     },
     { 
       header: 'إجراءات', 
-      render: (item) => (
-        <div className="flex gap-2">
-          <button onClick={() => handleEdit(item)} className="text-blue-500 hover:underline">تعديل</button>
-          <button onClick={() => handleDelete(item.id)} className="text-red-500 hover:underline">حذف</button>
-        </div>
-      )
+      render: (item) => {
+        const isAccountant = user?.role === 'accountant';
+        return (
+          <div className="flex gap-2">
+            <button onClick={() => handleEdit(item)} className="text-blue-500 hover:underline">تعديل</button>
+            <button 
+              onClick={() => handleDelete(item.id)} 
+              className={isAccountant ? 'text-red-300 cursor-not-allowed' : 'text-red-500 hover:underline'}
+              disabled={isAccountant}
+            >
+              حذف
+            </button>
+          </div>
+        );
+      }
     }
   ];
 
@@ -134,14 +149,6 @@ export default function SuppliersPage() {
           <div>
             <label className="form-label">رقم الهاتف</label>
             <input name="phone" defaultValue={editingItem?.phone || ''} className="form-input" />
-          </div>
-          <div>
-            <label className="form-label">البريد الإلكتروني</label>
-            <input name="email" type="email" defaultValue={editingItem?.email || ''} className="form-input" />
-          </div>
-          <div>
-            <label className="form-label">الرصيد الافتتاحي (د.ع)</label>
-            <input name="balance" type="number" step="0.01" defaultValue={editingItem?.balance || 0} className="form-input" />
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-secondary">إلغاء</button>
