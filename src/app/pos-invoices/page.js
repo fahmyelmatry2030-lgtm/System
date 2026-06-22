@@ -9,6 +9,7 @@ import { formatIraqDate } from '@/lib/date-utils';
 export default function POSInvoicesPage() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -23,6 +24,7 @@ export default function POSInvoicesPage() {
   };
 
   useEffect(() => {
+    setUser(JSON.parse(localStorage.getItem('erp_user') || '{}'));
     fetchData();
   }, []);
 
@@ -157,10 +159,6 @@ export default function POSInvoicesPage() {
     }
   };
 
-  const user = JSON.parse(localStorage.getItem('erp_user') || '{}');
-  const isAccountant = user.role === 'accountant';
-  const isAdmin = user.role === 'admin';
-
   const columns = [
     { header: '#', render: (_, index) => index + 1 },
     { header: 'رقم الفاتورة', accessor: 'id' },
@@ -208,9 +206,9 @@ export default function POSInvoicesPage() {
           </button>
           <button
             onClick={() => handleDelete(row.id)}
-            className={`transition-all ${isAdmin ? 'text-red-600 hover:underline cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-50'}`}
-            disabled={!isAdmin}
-            title={isAdmin ? 'حذف الفاتورة' : 'لا توجد صلاحية'}
+            className={`transition-all ${user?.role === 'admin' ? 'text-red-600 hover:underline cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-50'}`}
+            disabled={user?.role !== 'admin'}
+            title={user?.role === 'admin' ? 'حذف الفاتورة' : 'لا توجد صلاحية'}
           >
             حذف
           </button>
