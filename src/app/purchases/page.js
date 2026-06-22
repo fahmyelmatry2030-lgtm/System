@@ -20,7 +20,7 @@ export default function Purchases() {
   const [supplierSearch, setSupplierSearch] = useState('');
   const [formData, setFormData] = useState({
     supplierId: '',
-    suppliername: '',
+    supplierName: '',
     date: new Date().toISOString().slice(0, 10),
     total: 0,
     paidAmount: 0,
@@ -61,7 +61,7 @@ export default function Purchases() {
     e.preventDefault();
     
     // ✅ Validation checks
-    if (!formData.suppliername.trim()) {
+    if (!formData.supplierName.trim()) {
       alert('⚠️ يرجى إدخال اسم المورد');
       return;
     }
@@ -112,7 +112,7 @@ export default function Purchases() {
       setEditingId(null);
       setFormData({
         supplierId: '',
-        suppliername: '',
+        supplierName: '',
         date: new Date().toISOString().slice(0, 10),
         total: 0,
         paidAmount: 0,
@@ -175,10 +175,10 @@ export default function Purchases() {
 
   const openEdit = (purchase) => {
     setEditingId(purchase.id);
-    setSupplierSearch(purchase.suppliername);
+    setSupplierSearch(purchase.supplierName);
     setFormData({
       supplierId: purchase.supplierId,
-      suppliername: purchase.suppliername,
+      supplierName: purchase.supplierName,
       date: purchase.date,
       total: purchase.total,
       paidAmount: purchase.paidAmount || 0,
@@ -192,7 +192,7 @@ export default function Purchases() {
     { header: '#', render: (_, idx) => idx + 1 },
     { header: '📄 رقم الفاتورة', accessor: 'id', render: (row) => <span className="font-bold text-blue-600">#{row.id}</span> },
     { header: '📅 التاريخ', accessor: 'date', render: (row) => formatIraqDate(row.date) },
-    { header: '🏪 المورد', accessor: 'suppliername', render: (row) => row.suppliername || '—' },
+    { header: '🏪 المورد', accessor: 'supplierName', render: (row) => row.supplierName || '—' },
     { header: '💰 المبلغ', accessor: 'total', render: (row) => <span className="font-bold">{formatCurrency(row.total)}</span> },
     { header: '✅ المدفوع', accessor: 'paidAmount', render: (row) => <span className="font-bold text-green-600">{formatCurrency(row.paidAmount || 0)}</span> },
     { 
@@ -293,7 +293,7 @@ export default function Purchases() {
             setSupplierSearch('');
             setFormData({
               supplierId: '',
-              suppliername: '',
+              supplierName: '',
               date: new Date().toISOString().slice(0, 10),
               total: 0,
               paidAmount: 0,
@@ -320,7 +320,7 @@ export default function Purchases() {
               setShowModal(true);
               setFormData({
                 supplierId: '',
-                suppliername: '',
+                supplierName: '',
                 date: new Date().toISOString().slice(0, 10),
                 total: 0,
                 paidAmount: 0,
@@ -354,9 +354,9 @@ export default function Purchases() {
                 setSupplierSearch(e.target.value);
                 const supplier = suppliers.find(s => s.name === e.target.value);
                 if (supplier) {
-                  setFormData({ ...formData, supplierId: supplier.id, suppliername: supplier.name });
+                  setFormData({ ...formData, supplierId: supplier.id, supplierName: supplier.name });
                 } else {
-                  setFormData({ ...formData, suppliername: e.target.value });
+                  setFormData({ ...formData, supplierName: e.target.value });
                 }
               }}
               className="form-input border-2"
@@ -435,7 +435,7 @@ export default function Purchases() {
             <div className="grid grid-cols-2 gap-4 pb-4 border-b-2">
               <div>
                 <p className="text-xs text-gray-600 mb-1 font-semibold">المورد</p>
-                <p className="font-bold text-gray-900">{selectedPurchase.suppliername || '—'}</p>
+                <p className="font-bold text-gray-900">{selectedPurchase.supplierName || '—'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-600 mb-1 font-semibold">التاريخ</p>
