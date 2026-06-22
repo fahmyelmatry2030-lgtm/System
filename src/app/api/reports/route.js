@@ -60,22 +60,23 @@ export async function GET(request) {
       });
       data.byRep = Object.values(byRep);
     } else if (type === 'purchases') {
-      const purchases = (await query("SELECT * FROM purchases WHERE postStatus = 'posted' ORDER BY date DESC")).rows;
+      // ✅ عرض جميع المشتريات (مرحّلة وغير مرحّلة)
+      const purchases = (await query("SELECT * FROM purchases ORDER BY date DESC")).rows;
       
       data.purchases = purchases;
-      data.totalPurchases = purchases.reduce((sum, p) => sum + p.total, 0);
-      data.totalPaid = purchases.reduce((sum, p) => sum + p.paidamount, 0);
+      data.totalPurchases = purchases.reduce((sum, p) => sum + (p.total || 0), 0);
+      data.totalPaid = purchases.reduce((sum, p) => sum + (p.paidAmount || p.paidamount || 0), 0);
       data.totalRemaining = data.totalPurchases - data.totalPaid;
       
       // Group by supplier
       const bySupplier = {};
       purchases.forEach(p => {
-        const supplierName = p.suppliername;
+        const supplierName = p.supplierName || p.suppliername || 'غير محدد';
         if (!bySupplier[supplierName]) {
           bySupplier[supplierName] = { supplierName, count: 0, total: 0 };
         }
         bySupplier[supplierName].count++;
-        bySupplier[supplierName].total += p.total;
+        bySupplier[supplierName].total += p.total || 0;
       });
       data.bySupplier = Object.values(bySupplier);
     } else if (type === 'stocktake') {

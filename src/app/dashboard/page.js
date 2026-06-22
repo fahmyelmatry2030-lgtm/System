@@ -39,8 +39,9 @@ export default async function Dashboard() {
     LEFT JOIN products p ON si.productId = p.id
   `)).rows;
   const salesProfit = saleItems.reduce((acc, item) => {
-    const cost = (item.purchasePrice || 0) * item.qty;
-    return acc + (item.total - cost);
+    const salePrice = (item.price || 0) * (item.qty || 0);
+    const cost = (item.purchasePrice || 0) * (item.qty || 0);
+    return acc + (salePrice - cost);
   }, 0);
 
   // Expenses
