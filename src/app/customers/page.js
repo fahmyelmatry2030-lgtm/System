@@ -225,6 +225,8 @@ export default function CustomersPage() {
           <div>
             <label className="form-label">رقم الهاتف 📱</label>
             <input 
+              type="tel"
+              dir="ltr"
               name="phone" 
               defaultValue={editingItem?.phone || ''} 
               placeholder="07 XXX XXX XXXX"

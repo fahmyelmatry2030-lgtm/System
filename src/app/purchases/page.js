@@ -59,10 +59,28 @@ export default function Purchases() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // ✅ Validation checks
     if (!formData.suppliername.trim()) {
       alert('⚠️ يرجى إدخال اسم المورد');
       return;
     }
+    
+    if (!formData.date.trim()) {
+      alert('⚠️ يرجى اختيار التاريخ');
+      return;
+    }
+    
+    if (!formData.total || formData.total <= 0) {
+      alert('⚠️ يرجى إدخال مبلغ إجمالي أكبر من صفر');
+      return;
+    }
+    
+    if (formData.paidAmount < 0) {
+      alert('⚠️ لا يمكن أن يكون المبلغ المدفوع سالباً');
+      return;
+    }
+    
     try {
       const method = editingId ? 'PUT' : 'POST';
       const payload = { 
@@ -72,12 +90,23 @@ export default function Purchases() {
         postStatus: 'pending',
         ...(editingId && { id: editingId }) 
       };
+      
+      console.log('Sending purchase payload:', payload);
+      
       const res = await fetch('/api/purchases', { 
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload) 
       });
-      if (!res.ok) throw new Error(await res.text());
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'فشل الحفظ');
+      }
+      
+      const result = await res.json();
+      console.log('Purchase saved:', result);
+      
       fetchPurchases();
       setShowModal(false);
       setEditingId(null);
@@ -92,7 +121,7 @@ export default function Purchases() {
       });
       alert('✅ تم ' + (editingId ? 'تحديث' : 'إنشاء') + ' الفاتورة بنجاح');
     } catch (error) {
-      console.error(error);
+      console.error('Purchase error:', error);
       alert('❌ خطأ: ' + error.message);
     }
   };

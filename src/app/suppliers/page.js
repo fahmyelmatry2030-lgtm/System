@@ -148,7 +148,31 @@ export default function SuppliersPage() {
           </div>
           <div>
             <label className="form-label">رقم الهاتف</label>
-            <input name="phone" defaultValue={editingItem?.phone || ''} className="form-input" />
+            <input 
+              type="tel"
+              dir="ltr"
+              name="phone" 
+              defaultValue={editingItem?.phone || ''} 
+              placeholder="(0772) 237 0807"
+              onChange={(e) => {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value.length > 11) {
+                  value = value.substring(0, 11);
+                }
+                // Auto-format: (0772) 237 0807
+                if (value.length >= 4) {
+                  const part1 = value.substring(0, 4);
+                  const part2 = value.substring(4, 7);
+                  const part3 = value.substring(7, 11);
+                  const formatted = '(' + part1 + ')' + (part2 ? ' ' + part2 : '') + (part3 ? ' ' + part3 : '');
+                  e.target.value = formatted;
+                } else {
+                  e.target.value = value;
+                }
+              }}
+              className="form-input" 
+              maxLength="16"
+            />
           </div>
           <input type="hidden" name="balance" value={editingItem?.balance || 0} />
           <div className="flex justify-end gap-2 mt-4">

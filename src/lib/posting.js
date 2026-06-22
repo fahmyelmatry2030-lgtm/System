@@ -270,6 +270,44 @@ export async function reverseRecordEffects(entity, id) {
   if (reverse) await reverse(id);
 }
 
+// ✅ NEW: Cancel posting and reverse effects
+export async function unpostRecord(entity, id, user) {
+  const table = ENTITY_TABLES[entity];
+  if (!table) throw new Error('نوع العملية غير مدعوم');
+
+  const record = (await query(`SELECT * FROM ${table} WHERE id = ?`, [id])).rows[0];
+  if (!record) throw new Error('العملية غير موجودة');
+  if (getPostStatus(record) !== 'posted') throw new Error('العملية غير مرحّلة');
+  if (user?.role !== 'admin') throw new Error('فقط المدير يمكنه إلغاء الترحيل');
+
+  // Reverse the effects
+  const reverse = REVERSE_HANDLERS[entity];
+  if (reverse) await reverse(id);
+
+  // Update record status
+  await query(
+    `UPDATE ${table} SET postStatus = ?, postedBy = NULL, postedByName = NULL, postedAt = NULL WHERE id = ?`,
+    ['pending', id]
+  );
+
+  // Log to audit trail
+  const auditId = 'LOG-' + Date.now();
+  await query(
+    `INSERT INTO audit_logs (id, action, entity, recordId, userId, userName, details, timestamp)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      auditId,
+      'إلغاء ترحيل',
+      entity,
+      id,
+      user?.id || null,
+      user?.fullName || null,
+      `تم إلغاء ترحيل ${entity} برقم ${id}`,
+      new Date().toISOString()
+    ]
+  );
+}
+
 export function resolveInitialPostStatus(user) {
   return user?.role === 'admin' ? 'posted' : 'pending';
 }

@@ -98,6 +98,12 @@ export default function InventoryPage() {
     setSkuError('');
     setPriceError('');
 
+    // ✅ Validate SKU is not empty
+    if (!payload.sku || payload.sku.trim() === '') {
+      setSkuError('⚠️ رمز المنتج (SKU) إجباري');
+      return;
+    }
+
     // Validate name uniqueness
     const nameExists = data.some(item => item.name.trim() === payload.name.trim() && item.id !== editingItem?.id);
     if (nameExists) {
@@ -106,12 +112,17 @@ export default function InventoryPage() {
     }
 
     // Validate SKU uniqueness
-    if (payload.sku) {
-      const skuExists = data.some(item => item.sku === payload.sku && item.id !== editingItem?.id);
-      if (skuExists) {
-        setSkuError('⚠️ رمز المنتج موجود بالفعل');
-        return;
-      }
+    const skuExists = data.some(item => item.sku === payload.sku && item.id !== editingItem?.id);
+    if (skuExists) {
+      setSkuError('⚠️ رمز المنتج موجود بالفعل');
+      return;
+    }
+
+    // ✅ Validate quantity is >= 1
+    const qty = parseInt(payload.qty) || 0;
+    if (qty < 1) {
+      alert('⚠️ الكمية يجب أن تكون 1 على الأقل');
+      return;
     }
 
     // Validate sell price >= purchase price
@@ -264,11 +275,13 @@ export default function InventoryPage() {
           </div>
           
           <div>
-            <label className="form-label">🆔 رمز المنتج (SKU)</label>
+            <label className="form-label">🆔 رمز المنتج (SKU) *</label>
             <input 
               name="sku" 
               defaultValue={editingItem?.sku || ''} 
               maxLength="50"
+              required
+              placeholder="مثل: SKU001"
               className={`form-input border-2 transition-colors ${skuError ? 'border-red-500 bg-red-50' : 'border-gray-300 focus:border-blue-500'}`} 
             />
             {skuError && <p className="text-red-600 text-sm mt-1 font-semibold">{skuError}</p>}
@@ -276,32 +289,31 @@ export default function InventoryPage() {
           
           <div>
             <label className="form-label">📂 الفئة</label>
-            <input 
+            <select 
               name="category" 
-              list="category-list"
               defaultValue={editingItem?.category || ''} 
-              maxLength="50"
-              placeholder="اكتب الفئة أو اخترها"
               className="form-input border-2"
-            />
-            <datalist id="category-list">
+            >
+              <option value="">-- اختر فئة موجودة --</option>
               {categories.map(cat => (
-                <option key={cat} value={cat} />
+                <option key={cat} value={cat}>{cat}</option>
               ))}
-            </datalist>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">📌 يمكنك فقط اختيار من الفئات الموجودة</p>
           </div>
           
           <div>
-            <label className="form-label">📊 الكمية</label>
+            <label className="form-label">📊 الكمية *</label>
             <input 
               name="qty" 
               type="number" 
-              min="0"
+              min="1"
               step="1"
-              defaultValue={editingItem?.qty || 0} 
+              defaultValue={editingItem?.qty || 1} 
               required 
               className="form-input border-2"
             />
+            <p className="text-xs text-gray-500 mt-1">⚠️ يجب أن تكون الكمية 1 على الأقل</p>
           </div>
           
           <div className="grid grid-cols-2 gap-3">

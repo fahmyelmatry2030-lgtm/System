@@ -32,11 +32,11 @@ export async function GET(request) {
       data.customers = (await query('SELECT id, name, balance FROM customers WHERE balance > 0 ORDER BY balance DESC')).rows;
       data.suppliers = (await query('SELECT id, name, balance FROM suppliers WHERE balance > 0 ORDER BY balance DESC')).rows;
     } else if (type === 'sales') {
-      let sqlQuery = "SELECT * FROM sales WHERE postStatus = 'posted'";
+      let sqlQuery = "SELECT * FROM sales";  // ✅ عرض جميع المبيعات (مرحّلة وغير مرحّلة)
       let params = [];
       
       if (startDate && endDate) {
-        sqlQuery += ' AND date BETWEEN ? AND ?';
+        sqlQuery += ' WHERE date BETWEEN ? AND ?';
         params.push(startDate, endDate);
       }
       
@@ -45,13 +45,13 @@ export async function GET(request) {
       
       data.sales = sales;
       data.totalSales = sales.reduce((sum, s) => sum + s.total, 0);
-      data.totalPaid = sales.reduce((sum, s) => sum + s.paidamount, 0);
+      data.totalPaid = sales.reduce((sum, s) => sum + (s.paidamount || s.paidAmount || 0), 0);
       data.totalRemaining = data.totalSales - data.totalPaid;
       
       // Group by rep
       const byRep = {};
       sales.forEach(s => {
-        const repName = s.repname || 'غير محدد';
+        const repName = s.repname || s.repName || 'غير محدد';
         if (!byRep[repName]) {
           byRep[repName] = { repName, count: 0, total: 0 };
         }

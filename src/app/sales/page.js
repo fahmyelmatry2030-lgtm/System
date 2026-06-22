@@ -191,6 +191,40 @@ export default function SalesPage() {
     }
   };
 
+  // ✅ NEW: Post (Approve) a sale
+  const handlePost = async (id) => {
+    if (!confirm('هل تريد ترحيل هذه الفاتورة؟')) return;
+    try {
+      const res = await fetch('/api/sales', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) throw new Error('خطأ في الترحيل');
+      fetchSales();
+      alert('✅ تم ترحيل الفاتورة بنجاح');
+    } catch (err) {
+      alert('❌ خطأ: ' + err.message);
+    }
+  };
+
+  // ✅ NEW: Unpost (Cancel posting) a sale
+  const handleUnpost = async (id) => {
+    if (!confirm('⚠️ هل أنت متأكد من إلغاء ترحيل هذه الفاتورة؟ سيتم إرجاع المخزون.')) return;
+    try {
+      const res = await fetch('/api/sales', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'unpost' }),
+      });
+      if (!res.ok) throw new Error('خطأ في إلغاء الترحيل');
+      fetchSales();
+      alert('✅ تم إلغاء الترحيل بنجاح');
+    } catch (err) {
+      alert('❌ خطأ: ' + err.message);
+    }
+  };
+
   const handleEdit = (sale) => {
     setEditingId(sale.id);
     setFormData({
@@ -253,9 +287,9 @@ export default function SalesPage() {
       header: 'الإجراءات',
       render: (row) => {
         const isPosted = row.postStatus === 'posted';
-        const isAccountant = user?.role === 'accountant';
+        const isAdmin = user?.role === 'admin';
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => handleEdit(row)}
               className={`transition-all ${
@@ -275,6 +309,27 @@ export default function SalesPage() {
             >
               🖨️ طبع
             </button>
+            
+            {/* ✅ Post/Unpost buttons for admin only */}
+            {isAdmin && !isPosted && (
+              <button
+                onClick={() => handlePost(row.id)}
+                className="text-blue-600 hover:text-blue-700 cursor-pointer text-sm px-2 py-1 rounded bg-blue-50"
+                title="ترحيل الفاتورة"
+              >
+                ✅ ترحيل
+              </button>
+            )}
+            {isAdmin && isPosted && (
+              <button
+                onClick={() => handleUnpost(row.id)}
+                className="text-red-600 hover:text-red-700 cursor-pointer text-sm px-2 py-1 rounded bg-red-50"
+                title="إلغاء ترحيل الفاتورة"
+              >
+                ❌ إلغاء ترحيل
+              </button>
+            )}
+            
             <button
               onClick={() => handleDelete(row.id)}
               className={`transition-all ${
