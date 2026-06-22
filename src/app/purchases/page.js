@@ -139,6 +139,40 @@ export default function Purchases() {
     }
   };
 
+  // ✅ NEW: Post (Approve) a purchase
+  const handlePost = async (id) => {
+    if (!confirm('هل تريد ترحيل هذه الفاتورة؟')) return;
+    try {
+      const res = await fetch('/api/purchases', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) throw new Error('خطأ في الترحيل');
+      fetchPurchases();
+      alert('✅ تم ترحيل الفاتورة بنجاح');
+    } catch (err) {
+      alert('❌ خطأ: ' + err.message);
+    }
+  };
+
+  // ✅ NEW: Unpost (Cancel posting) a purchase
+  const handleUnpost = async (id) => {
+    if (!confirm('⚠️ هل أنت متأكد من إلغاء ترحيل هذه الفاتورة؟ سيتم إرجاع المخزون.')) return;
+    try {
+      const res = await fetch('/api/purchases', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'unpost' }),
+      });
+      if (!res.ok) throw new Error('خطأ في إلغاء الترحيل');
+      fetchPurchases();
+      alert('✅ تم إلغاء الترحيل بنجاح');
+    } catch (err) {
+      alert('❌ خطأ: ' + err.message);
+    }
+  };
+
   const openEdit = (purchase) => {
     setEditingId(purchase.id);
     setSupplierSearch(purchase.suppliername);
@@ -189,8 +223,9 @@ export default function Purchases() {
       header: '⚙️ الإجراءات',
       render: (row) => {
         const isPosted = row.postStatus === 'posted';
+        const isAdmin = user?.role === 'admin';
         return (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => {
                 setSelectedPurchase(row);
@@ -218,6 +253,26 @@ export default function Purchases() {
                   🗑️ حذف
                 </button>
               </>
+            )}
+            
+            {/* ✅ Post/Unpost buttons for admin only */}
+            {isAdmin && !isPosted && (
+              <button
+                onClick={() => handlePost(row.id)}
+                className="text-blue-600 hover:text-blue-700 cursor-pointer text-sm px-2 py-1 rounded bg-blue-50"
+                title="ترحيل الفاتورة"
+              >
+                ✅ ترحيل
+              </button>
+            )}
+            {isAdmin && isPosted && (
+              <button
+                onClick={() => handleUnpost(row.id)}
+                className="text-red-600 hover:text-red-700 cursor-pointer text-sm px-2 py-1 rounded bg-red-50"
+                title="إلغاء ترحيل الفاتورة"
+              >
+                ❌ إلغاء ترحيل
+              </button>
             )}
           </div>
         );

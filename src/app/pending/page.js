@@ -37,8 +37,10 @@ export default function PendingPage() {
 
   const getTypeColor = (type) => {
     const colors = {
+      sales: 'bg-blue-100 text-blue-700 border-blue-300',
+      purchases: 'bg-amber-100 text-amber-700 border-amber-300',
       collections: 'bg-green-100 text-green-700 border-green-300',
-      returns: 'bg-blue-100 text-blue-700 border-blue-300',
+      returns: 'bg-indigo-100 text-indigo-700 border-indigo-300',
       expenses: 'bg-orange-100 text-orange-700 border-orange-300',
       damaged: 'bg-red-100 text-red-700 border-red-300',
       stocktakes: 'bg-purple-100 text-purple-700 border-purple-300',

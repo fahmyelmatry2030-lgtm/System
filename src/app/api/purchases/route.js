@@ -1,6 +1,7 @@
 import { query } from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { getUserFromRequest, canModifyRecord, isPosted } from '@/lib/api-auth';
+import { applyPurchaseEffects, reversePurchaseEffects } from '@/lib/posting';
 
 function field(record, ...keys) {
   for (const key of keys) {
@@ -108,6 +109,97 @@ export async function DELETE(request) {
     await query('DELETE FROM purchases WHERE id=?', [id]);
 
     return NextResponse.json({ success: true, id });
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// ✅ NEW: Post/Unpost purchases (similar to sales)
+export async function PATCH(request) {
+  try {
+    const data = await request.json();
+    const user = getUserFromRequest(data);
+    const { id, action } = data;
+    
+    if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+    if (user?.role !== 'admin') {
+      return NextResponse.json({ error: 'فقط المدير يمكنه ترحيل أو إلغاء ترحيل الفواتير' }, { status: 403 });
+    }
+
+    const existing = (await query('SELECT * FROM purchases WHERE id = ?', [id])).rows[0];
+    if (!existing) return NextResponse.json({ error: 'الفاتورة غير موجودة' }, { status: 404 });
+
+    // If no action specified, default to 'post'
+    if (!action || action === 'post') {
+      // POST: Move from pending to posted
+      if (existing.postStatus === 'posted') {
+        return NextResponse.json({ error: 'الفاتورة مرحلة بالفعل' }, { status: 400 });
+      }
+      
+      // Apply effects (add inventory, update supplier balance)
+      await applyPurchaseEffects(id);
+      
+      // Update to posted
+      await query(
+        'UPDATE purchases SET postStatus = ?, postedBy = ?, postedByName = ?, postedAt = ? WHERE id = ?',
+        ['posted', user?.id || null, user?.fullName || null, new Date().toISOString(), id]
+      );
+      
+      // Log to audit trail
+      const auditId = 'LOG-' + Date.now();
+      await query(
+        `INSERT INTO audit_logs (id, action, entity, recordId, userId, userName, details, timestamp)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          auditId,
+          'ترحيل',
+          'purchases',
+          id,
+          user?.id || null,
+          user?.fullName || null,
+          `تم ترحيل فاتورة الشراء ${id}`,
+          new Date().toISOString()
+        ]
+      );
+      
+      return NextResponse.json({ success: true, id, message: 'تم ترحيل الفاتورة بنجاح' });
+    } 
+    else if (action === 'unpost') {
+      // UNPOST: Move from posted to pending
+      if (existing.postStatus !== 'posted') {
+        return NextResponse.json({ error: 'الفاتورة غير مرحلة' }, { status: 400 });
+      }
+      
+      // Reverse effects (restore inventory, update supplier balance)
+      await reversePurchaseEffects(id);
+      
+      // Update to pending
+      await query(
+        'UPDATE purchases SET postStatus = ?, postedBy = NULL, postedByName = NULL, postedAt = NULL WHERE id = ?',
+        ['pending', id]
+      );
+      
+      // Log to audit trail
+      const auditId = 'LOG-' + Date.now();
+      await query(
+        `INSERT INTO audit_logs (id, action, entity, recordId, userId, userName, details, timestamp)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          auditId,
+          'إلغاء ترحيل',
+          'purchases',
+          id,
+          user?.id || null,
+          user?.fullName || null,
+          `تم إلغاء ترحيل فاتورة الشراء ${id}`,
+          new Date().toISOString()
+        ]
+      );
+      
+      return NextResponse.json({ success: true, id, message: 'تم إلغاء الترحيل بنجاح' });
+    }
+    
+    return NextResponse.json({ error: 'إجراء غير معروف' }, { status: 400 });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

@@ -103,7 +103,7 @@ export default function POSPage() {
   };
 
   const customerSuggestions = customerQuery
-    ? customers.filter(c => c.name.toLowerCase().startsWith(customerQuery.toLowerCase()))
+    ? customers.filter(c => c.name.toLowerCase().includes(customerQuery.toLowerCase()))
     : [];
 
   const filteredProducts = products.filter(p => 
