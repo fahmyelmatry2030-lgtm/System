@@ -17,7 +17,7 @@ export async function GET() {
 
     const salesWithItems = sales.map((s) => ({
       ...s,
-      items: saleItems.filter((i) => i.saleid === s.id || i.saleId === s.id),
+      items: saleItems.filter((i) => field(i, 'saleId', 'saleid') === s.id),
     }));
     return NextResponse.json({ sales: salesWithItems });
   } catch (error) {

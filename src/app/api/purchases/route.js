@@ -17,7 +17,7 @@ export async function GET() {
 
     const purchasesWithItems = purchases.map((p) => ({
       ...p,
-      items: purchaseItems.filter((i) => i.purchaseId === p.id || i.purchaseid === p.id),
+      items: purchaseItems.filter((i) => field(i, 'purchaseId', 'purchaseid') === p.id),
     }));
     return NextResponse.json({ purchases: purchasesWithItems });
   } catch (error) {
@@ -29,7 +29,7 @@ export async function POST(request) {
   try {
     const data = await request.json();
     const user = getUserFromRequest(data);
-    const { supplierId, suppliername, date, total, paidAmount, notes, items } = data;
+    const { supplierId, supplierName, date, total, paidAmount, notes, items } = data;
     
     // Get sequential invoice number
     const lastPurchase = (await query('SELECT id FROM purchases ORDER BY id DESC LIMIT 1')).rows[0];
@@ -46,7 +46,7 @@ export async function POST(request) {
       `INSERT INTO purchases (id, supplierId, supplierName, date, total, paidAmount, notes, postStatus, createdBy, createdByName, postedBy, postedByName, postedAt)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        id, supplierId, suppliername, date, total || 0, paidAmount || 0, notes || '',
+        id, supplierId, supplierName, date, total || 0, paidAmount || 0, notes || '',
         'pending', user?.id || null, user?.fullName || null, null, null, null,
       ]
     );
@@ -70,7 +70,7 @@ export async function PUT(request) {
   try {
     const data = await request.json();
     const user = getUserFromRequest(data);
-    const { id, supplierId, suppliername, date, total, paidAmount, notes, items } = data;
+    const { id, supplierId, supplierName, date, total, paidAmount, notes, items } = data;
     if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
 
     const existing = (await query('SELECT * FROM purchases WHERE id = ?', [id])).rows[0];
@@ -78,7 +78,7 @@ export async function PUT(request) {
 
     await query(
       'UPDATE purchases SET supplierId=?, supplierName=?, date=?, total=?, paidAmount=?, notes=? WHERE id=?',
-      [supplierId, suppliername, date, total, paidAmount, notes || '', id]
+      [supplierId, supplierName, date, total, paidAmount, notes || '', id]
     );
 
     if (items && Array.isArray(items)) {
