@@ -209,9 +209,10 @@ export default async function Dashboard() {
           subtitle1="المبيعات" val2={formatCurrency(totalSalesValue)}
           subtitle2="الربح" val3={formatCurrency(salesProfit)}
         />
-        </RoleGuard>
+        </div>
+      </RoleGuard>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full col-span-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full col-span-full">
           <DashboardCard 
             title="إجمالي الكميات" 
           value={totalQuantity.toLocaleString()} 
