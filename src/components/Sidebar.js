@@ -8,6 +8,7 @@ import {
   DollarSign, FileText, AlertTriangle, ClipboardCheck, Settings,
   RotateCcw, Clock, BarChart2, MonitorSmartphone, Truck, History
 } from 'lucide-react';
+import InstallPWA from './InstallPWA';
 
 export default function Sidebar({ user }) {
   const pathname = usePathname();
@@ -92,6 +93,7 @@ export default function Sidebar({ user }) {
           );
         })}
       </nav>
+      <InstallPWA />
     </aside>
   );
 }

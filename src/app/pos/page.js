@@ -148,7 +148,8 @@ export default function POSPage() {
         productId: item.id,
         productName: item.name,
         qty: item.qty,
-        price: item.price
+        price: item.price,
+        purchasePrice: item.purchasePrice
       })),
       discount: discount,
       paidAmount: paidAmount,
@@ -357,7 +358,18 @@ export default function POSPage() {
                   type="number" 
                   className="w-28 px-2 py-1 border-2 border-orange-300 rounded-lg text-left font-bold" 
                   value={discount} 
-                  onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)} 
+                  onChange={(e) => {
+                    let val = parseFloat(e.target.value) || 0;
+                    if (user?.role === 'rep') {
+                      const totalCost = cart.reduce((sum, item) => sum + ((item.purchasePrice || item.price) * item.qty), 0);
+                      const maxDiscount = Math.max(0, calculateTotal() - totalCost);
+                      if (val > maxDiscount) {
+                        alert(`تجاوزت الحد الأقصى للخصم المسموح! الحد الأقصى هو ${maxDiscount}`);
+                        val = maxDiscount;
+                      }
+                    }
+                    setDiscount(Math.min(calculateTotal(), Math.max(0, val)));
+                  }} 
                 />
               </div>
               <div className="flex justify-between items-center p-2 bg-green-50 rounded-lg">
@@ -366,7 +378,7 @@ export default function POSPage() {
                   type="number" 
                   className="w-28 px-2 py-1 border-2 border-green-300 rounded-lg text-left font-bold" 
                   value={paidAmount} 
-                  onChange={(e) => setPaidAmount(parseFloat(e.target.value) || 0)} 
+                  onChange={(e) => setPaidAmount(Math.max(0, parseFloat(e.target.value) || 0))} 
                 />
               </div>
               <div className="flex justify-between items-center p-2 bg-purple-50 rounded-lg">

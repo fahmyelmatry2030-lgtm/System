@@ -77,18 +77,24 @@ export default function PrintInvoice({ record, type = 'sales', settings }) {
       <div className="flex justify-end mb-8">
         <div className="w-64 bg-gray-50 p-4 rounded-xl border border-gray-200">
           <div className="flex justify-between mb-2 text-gray-600">
-            <span>المجموع:</span>
-            <span>{formatCurrency(record.total)}</span>
+            <span>المجموع الفرعي:</span>
+            <span>{formatCurrency((record.total || 0) + (record.discount || 0))}</span>
           </div>
+          {record.discount ? (
+            <div className="flex justify-between mb-2 text-orange-600">
+              <span>الخصم:</span>
+              <span>- {formatCurrency(record.discount)}</span>
+            </div>
+          ) : null}
           {taxRate > 0 && (
             <div className="flex justify-between mb-2 text-gray-600">
               <span>ضريبة القيمة المضافة ({taxRate}%):</span>
-              <span>{formatCurrency(record.total * (taxRate / 100))}</span>
+              <span>{formatCurrency((record.total || 0) * (taxRate / 100))}</span>
             </div>
           )}
           <div className="flex justify-between pt-2 border-t border-gray-200 font-bold text-xl text-blue-600">
             <span>الإجمالي النهائي:</span>
-            <span>{formatCurrency(record.total + (record.total * (taxRate / 100)))}</span>
+            <span>{formatCurrency((record.total || 0) + ((record.total || 0) * (taxRate / 100)))}</span>
           </div>
           <div className="flex justify-between mt-4 text-sm text-gray-500">
             <span>المدفوع:</span>

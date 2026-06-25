@@ -26,6 +26,7 @@ export default function SalesPage() {
     customerName: '',
     date: getIraqDateISO(),
     items: [],
+    discount: 0,
     paymentStatus: 'unpaid',
     partialAmount: 0,
   });
@@ -76,8 +77,9 @@ export default function SalesPage() {
 
   const calculateRemaining = () => {
     const total = calculateTotal();
-    const paid = formData.paymentStatus === 'partial' ? (formData.partialAmount || 0) : (formData.paymentStatus === 'paid' ? total : 0);
-    return Math.max(0, total - paid);
+    const finalTotal = Math.max(0, total - (formData.discount || 0));
+    const paid = formData.paymentStatus === 'partial' ? (formData.partialAmount || 0) : (formData.paymentStatus === 'paid' ? finalTotal : 0);
+    return Math.max(0, finalTotal - paid);
   };
 
   const handleAddItem = () => {
@@ -131,20 +133,22 @@ export default function SalesPage() {
 
     try {
       const total = calculateTotal();
+      const finalTotal = Math.max(0, total - (formData.discount || 0));
       const paidAmount = formData.paymentStatus === 'partial' 
         ? (formData.partialAmount || 0) 
-        : (formData.paymentStatus === 'paid' ? total : 0);
+        : (formData.paymentStatus === 'paid' ? finalTotal : 0);
 
       const payload = {
         customerId: formData.customerId,
         customerName: formData.customerName,
         date: formData.date,
         items: formData.items,
-        total,
+        total: finalTotal,
+        discount: formData.discount || 0,
         paidAmount,
         paymentStatus: formData.paymentStatus,
         postStatus: 'pending', // يبقى معلق لحين ترحيل المدير
-        notes: 'تم الإنشاء من نقطة البيع'
+        notes: 'تم الإنشاء من إدارة المبيعات'
       };
 
       const method = editingId ? 'PUT' : 'POST';
@@ -172,6 +176,7 @@ export default function SalesPage() {
       customerName: '',
       date: getIraqDateISO(),
       items: [],
+      discount: 0,
       paymentStatus: 'unpaid',
       partialAmount: 0,
     });
@@ -232,6 +237,7 @@ export default function SalesPage() {
       customerName: sale.customerName,
       date: sale.date,
       items: sale.items || [],
+      discount: sale.discount || 0,
       paymentStatus: sale.paymentStatus || 'unpaid',
       partialAmount: sale.paidAmount || 0,
     });
@@ -500,7 +506,23 @@ export default function SalesPage() {
           <div className="bg-gray-50 p-4 rounded-lg space-y-3 border-2 border-gray-200">
             <div className="flex justify-between items-center">
               <span className="text-sm font-semibold text-gray-700">الإجمالي الفرعي:</span>
-              <span className="text-lg font-bold text-blue-600">{formatCurrency(calculateTotal())}</span>
+              <span className="text-lg font-bold text-gray-600">{formatCurrency(calculateTotal())}</span>
+            </div>
+            
+            <div className="flex justify-between items-center bg-orange-50 p-2 rounded">
+              <span className="text-sm font-semibold text-gray-700">الخصم (Discount):</span>
+              <input
+                type="number"
+                min="0"
+                value={formData.discount}
+                onChange={(e) => setFormData({ ...formData, discount: Math.min(calculateTotal(), Math.max(0, parseFloat(e.target.value) || 0)) })}
+                className="form-input text-sm w-32 text-left font-bold border-orange-300"
+              />
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-semibold text-gray-700">الإجمالي النهائي:</span>
+              <span className="text-lg font-bold text-blue-600">{formatCurrency(Math.max(0, calculateTotal() - (formData.discount || 0)))}</span>
             </div>
             
             <div>
@@ -537,7 +559,7 @@ export default function SalesPage() {
                   {formatCurrency(
                     formData.paymentStatus === 'partial' 
                       ? (formData.partialAmount || 0) 
-                      : (formData.paymentStatus === 'paid' ? calculateTotal() : 0)
+                      : (formData.paymentStatus === 'paid' ? Math.max(0, calculateTotal() - (formData.discount || 0)) : 0)
                   )}
                 </span>
               </div>
@@ -621,7 +643,17 @@ export default function SalesPage() {
             <div className="bg-gray-50 p-3 rounded-lg space-y-2 text-sm">
               <div className="flex justify-between">
                 <span>المجموع الفرعي:</span>
-                <span className="font-bold">{formatCurrency(printingInvoice.total)}</span>
+                <span className="font-bold">{formatCurrency((printingInvoice.total || 0) + (printingInvoice.discount || 0))}</span>
+              </div>
+              {printingInvoice.discount ? (
+                <div className="flex justify-between">
+                  <span>الخصم:</span>
+                  <span className="font-bold text-orange-600">- {formatCurrency(printingInvoice.discount)}</span>
+                </div>
+              ) : null}
+              <div className="flex justify-between">
+                <span>الإجمالي النهائي:</span>
+                <span className="font-bold text-blue-600">{formatCurrency(printingInvoice.total || 0)}</span>
               </div>
               <div className="flex justify-between">
                 <span>المدفوع:</span>

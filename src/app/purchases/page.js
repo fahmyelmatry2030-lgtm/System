@@ -11,6 +11,7 @@ import { formatIraqDate } from '@/lib/date-utils';
 export default function Purchases() {
   const [purchases, setPurchases] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -28,11 +29,54 @@ export default function Purchases() {
     items: [],
   });
 
+  const fetchProducts = async () => {
+    try {
+      const res = await fetch('/api/products');
+      const data = await res.json();
+      setProducts(data.products || data.data || data || []);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     setUser(getStoredUser());
     fetchPurchases();
     fetchSuppliers();
+    fetchProducts();
   }, []);
+
+  const calculateTotal = () => {
+    return formData.items.reduce((sum, item) => sum + ((parseFloat(item.qty) || 0) * (parseFloat(item.price) || 0)), 0);
+  };
+
+  const handleAddItem = () => {
+    setFormData({
+      ...formData,
+      items: [...formData.items, { productId: '', productName: '', qty: 1, price: 0 }]
+    });
+  };
+
+  const handleUpdateItem = (index, field, value) => {
+    const newItems = [...formData.items];
+    newItems[index][field] = value;
+    if (field === 'productId') {
+      const product = products.find(p => p.id === value);
+      if (product) {
+        newItems[index].productName = product.name;
+        newItems[index].price = product.purchasePrice || 0;
+      } else {
+        newItems[index].productName = '';
+        newItems[index].price = 0;
+      }
+    }
+    setFormData({ ...formData, items: newItems });
+  };
+
+  const handleRemoveItem = (index) => {
+    const newItems = formData.items.filter((_, i) => i !== index);
+    setFormData({ ...formData, items: newItems });
+  };
 
   const fetchPurchases = useCallback(async () => {
     setLoading(true);
@@ -70,8 +114,26 @@ export default function Purchases() {
       alert('⚠️ يرجى اختيار التاريخ');
       return;
     }
+
+    if (!formData.items || formData.items.length === 0) {
+      alert('⚠️ يرجى إضافة منتجات للفاتورة');
+      return;
+    }
     
-    if (!formData.total || formData.total <= 0) {
+    for (const item of formData.items) {
+      if (!item.productId) {
+        alert('⚠️ يرجى اختيار المنتج في جميع الأسطر');
+        return;
+      }
+      if (item.qty <= 0) {
+        alert('⚠️ الكمية يجب أن تكون أكبر من صفر');
+        return;
+      }
+    }
+
+    const calculatedTotal = calculateTotal();
+    
+    if (calculatedTotal <= 0) {
       alert('⚠️ يرجى إدخال مبلغ إجمالي أكبر من صفر');
       return;
     }
@@ -86,7 +148,7 @@ export default function Purchases() {
       const payload = { 
         ...formData, 
         paidAmount: parseFloat(formData.paidAmount) || 0,
-        total: parseFloat(formData.total) || 0,
+        total: calculatedTotal,
         postStatus: 'pending',
         ...(editingId && { id: editingId }) 
       };
@@ -381,28 +443,85 @@ export default function Purchases() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Items Section */}
+          <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-gray-800">📦 منتجات الفاتورة</h3>
+              <button type="button" onClick={handleAddItem} className="btn btn-primary text-sm px-3 py-1">
+                ➕ إضافة منتج
+              </button>
+            </div>
+            
+            {formData.items.length === 0 ? (
+              <div className="text-center py-4 text-gray-500 border-2 border-dashed rounded-lg bg-white">
+                لا توجد منتجات. اضغط على الزر أعلاه للإضافة.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {formData.items.map((item, index) => (
+                  <div key={index} className="flex gap-2 items-center bg-white p-2 rounded border">
+                    <div className="flex-1">
+                      <select 
+                        value={item.productId}
+                        onChange={(e) => handleUpdateItem(index, 'productId', e.target.value)}
+                        className="form-select border-2 w-full text-sm py-1"
+                        required
+                      >
+                        <option value="">-- اختر المنتج --</option>
+                        {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="w-24">
+                      <input 
+                        type="number" 
+                        min="1" 
+                        value={item.qty}
+                        onChange={(e) => handleUpdateItem(index, 'qty', parseInt(e.target.value) || 0)}
+                        className="form-input border-2 text-sm py-1"
+                        placeholder="الكمية"
+                        required
+                      />
+                    </div>
+                    <div className="w-28">
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        min="0"
+                        value={item.price}
+                        onChange={(e) => handleUpdateItem(index, 'price', parseFloat(e.target.value) || 0)}
+                        className="form-input border-2 text-sm py-1"
+                        placeholder="السعر"
+                        required
+                      />
+                    </div>
+                    <div className="w-24 text-left font-bold text-gray-700 text-sm">
+                      {formatCurrency((item.qty || 0) * (item.price || 0))}
+                    </div>
+                    <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-500 hover:text-red-700 px-2">
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 bg-blue-50 p-4 rounded-lg border-2 border-blue-100">
             <div>
-              <label className="form-label">💰 المبلغ الإجمالي</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                required
-                value={formData.total}
-                onChange={(e) => setFormData({ ...formData, total: parseFloat(e.target.value) || 0 })}
-                className="form-input border-2"
-              />
+              <label className="form-label text-blue-900">💰 المبلغ الإجمالي</label>
+              <div className="text-2xl font-bold text-blue-800 pt-1">
+                {formatCurrency(calculateTotal())}
+              </div>
             </div>
             <div>
-              <label className="form-label">✅ المبلغ المدفوع</label>
+              <label className="form-label text-blue-900">✅ المبلغ المدفوع</label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={formData.paidAmount || 0}
                 onChange={(e) => setFormData({ ...formData, paidAmount: parseFloat(e.target.value) || 0 })}
-                className="form-input border-2"
+                className="form-input border-2 font-bold text-green-700 text-lg"
               />
             </div>
           </div>

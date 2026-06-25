@@ -60,8 +60,8 @@ export async function POST(request) {
     if (items && Array.isArray(items)) {
       for (const item of items) {
         await query(
-          'INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)',
-          [id, item.productId, item.productName, item.qty, item.price, item.qty * item.price]
+          'INSERT INTO sale_items (saleId, productId, productName, qty, price, purchasePrice, total) VALUES (?,?,?,?,?,?,?)',
+          [id, item.productId, item.productName, item.qty, item.price, item.purchasePrice || 0, item.qty * item.price]
         );
         
         // ✅ خصم الكمية فقط إذا لم تكن مرحّلة (المندوب)
@@ -117,8 +117,8 @@ export async function PUT(request) {
       await query('DELETE FROM sale_items WHERE saleId=?', [id]);
       for (const item of items) {
         await query(
-          'INSERT INTO sale_items (saleId, productId, productName, qty, price, total) VALUES (?,?,?,?,?,?)',
-          [id, item.productId, item.productName, item.qty, item.price, item.qty * item.price]
+          'INSERT INTO sale_items (saleId, productId, productName, qty, price, purchasePrice, total) VALUES (?,?,?,?,?,?,?)',
+          [id, item.productId, item.productName, item.qty, item.price, item.purchasePrice || 0, item.qty * item.price]
         );
         
         // ✅ خصم الكمية فقط للمبيعات غير المرحّلة

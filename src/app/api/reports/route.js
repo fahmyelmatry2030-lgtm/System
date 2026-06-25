@@ -16,6 +16,15 @@ export async function GET(request) {
       const expenses = (await query("SELECT SUM(amount) as total FROM expenses WHERE postStatus = 'posted'")).rows[0];
       const damaged = (await query("SELECT SUM(value) as total FROM damaged WHERE postStatus = 'posted'")).rows[0];
       
+      const cogsResult = (await query(`
+        SELECT SUM(si.qty * COALESCE(si.purchasePrice, p.purchasePrice, 0)) as cogs 
+        FROM sale_items si 
+        LEFT JOIN sales s ON si.saleId = s.id 
+        LEFT JOIN products p ON si.productId = p.id 
+        WHERE s.postStatus = 'posted'
+      `)).rows[0];
+      const cogs = cogsResult?.cogs || 0;
+
       data = {
         totalSales: sales.total || 0,
         paidSales: sales.paid || 0,
@@ -23,7 +32,8 @@ export async function GET(request) {
         paidPurchases: purchases.paid || 0,
         totalExpenses: expenses.total || 0,
         totalDamaged: damaged.total || 0,
-        netProfit: (sales.total || 0) - (purchases.total || 0) - (expenses.total || 0) - (damaged.total || 0)
+        cogs: cogs,
+        netProfit: (sales.total || 0) - cogs - (expenses.total || 0) - (damaged.total || 0)
       };
     } else if (type === 'inventory') {
       data.products = (await query('SELECT COUNT(*) as count, SUM(qty * purchasePrice) as value FROM products')).rows[0];

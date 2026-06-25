@@ -15,6 +15,7 @@ const cairo = Cairo({
 export const metadata = {
   title: "نظام إدارة المبيعات والمشتريات",
   description: "نظام متكامل لإدارة المبيعات والمشتريات والمخزون والحسابات",
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({ children }) {

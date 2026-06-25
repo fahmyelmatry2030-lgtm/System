@@ -63,7 +63,7 @@ export default function Reports() {
 
   const renderFinancial = () => {
     if (!data) return null;
-    const netProfit = (data.totalSales || 0) - (data.totalPurchases || 0) - (data.totalExpenses || 0) - (data.totalDamaged || 0);
+    const netProfit = data.netProfit || 0;
     return (
       <div className="space-y-6">
         <h2 className="text-3xl font-bold text-gray-800">📊 التقرير المالي والأرباح والخسائر</h2>
@@ -84,7 +84,7 @@ export default function Reports() {
               <TrendingDown className="w-5 h-5 text-orange-600" />
             </div>
             <p className="text-2xl font-bold text-orange-600">{formatCurrency(data.totalPurchases || 0)}</p>
-            <p className="text-xs text-gray-600 mt-1">جميع المبالغ المرحّلة</p>
+            <p className="text-xs text-gray-600 mt-1">إضافة للمخزون</p>
           </div>
 
           <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-2xl p-6 border border-red-200">
@@ -114,8 +114,8 @@ export default function Reports() {
               <p className="text-2xl font-bold text-green-600">{formatCurrency(data.totalSales || 0)}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600 mb-1">المصروفات (المشتريات + مصروفات + تالف)</p>
-              <p className="text-2xl font-bold text-red-600">{formatCurrency((data.totalPurchases || 0) + (data.totalExpenses || 0) + (data.totalDamaged || 0))}</p>
+              <p className="text-sm text-gray-600 mb-1">المصروفات (تكلفة المبيعات + مصروفات + تالف)</p>
+              <p className="text-2xl font-bold text-red-600">{formatCurrency((data.cogs || 0) + (data.totalExpenses || 0) + (data.totalDamaged || 0))}</p>
             </div>
             <div className={`rounded-lg p-4 ${netProfit >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
               <p className="text-sm text-gray-700 mb-1">صافي الربح / الخسارة</p>

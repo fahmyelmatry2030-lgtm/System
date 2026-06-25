@@ -106,7 +106,7 @@ export default function POSInvoicesPage() {
             <div class="summary">
               <div class="summary-row">
                 <span>المجموع الفرعي:</span>
-                <span>${formatCurrency(invoice.total || 0)}</span>
+                <span>${formatCurrency((invoice.total || 0) + (invoice.discount || 0))}</span>
               </div>
               ${invoice.discount ? `
               <div class="summary-row">
@@ -116,7 +116,7 @@ export default function POSInvoicesPage() {
               ` : ''}
               <div class="summary-row total">
                 <span>الإجمالي النهائي:</span>
-                <span>${formatCurrency((invoice.total || 0) - (invoice.discount || 0))}</span>
+                <span>${formatCurrency(invoice.total || 0)}</span>
               </div>
               <div class="summary-row">
                 <span>المدفوع:</span>
@@ -124,7 +124,7 @@ export default function POSInvoicesPage() {
               </div>
               <div class="summary-row">
                 <span>المتبقي:</span>
-                <span>${formatCurrency(Math.max(0, (invoice.total || 0) - (invoice.discount || 0) - (invoice.paidAmount || 0)))}</span>
+                <span>${formatCurrency(Math.max(0, (invoice.total || 0) - (invoice.paidAmount || 0)))}</span>
               </div>
 
               <div class="payment-method">

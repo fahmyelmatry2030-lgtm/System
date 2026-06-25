@@ -21,8 +21,8 @@ export default function Collections() {
   const [recipientError, setRecipientError] = useState('');
   
   const [formData, setFormData] = useState({
-    recipientName: '',
-    recipientType: 'customer',
+    customerId: '',
+    customerName: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
     method: 'cash',
@@ -62,8 +62,8 @@ export default function Collections() {
     e.preventDefault();
     setRecipientError('');
 
-    if (!formData.recipientName.trim()) {
-      setRecipientError('⚠️ يرجى إدخال اسم المتلقي');
+    if (!formData.customerId) {
+      setRecipientError('⚠️ يرجى اختيار العميل');
       return;
     }
     
@@ -98,8 +98,8 @@ export default function Collections() {
 
   const resetForm = () => {
     setFormData({
-      recipientName: '',
-      recipientType: 'customer',
+      customerId: '',
+      customerName: '',
       amount: '',
       date: new Date().toISOString().split('T')[0],
       method: 'cash',
@@ -111,7 +111,7 @@ export default function Collections() {
   const columns = [
     { header: '#', render: (_, idx) => idx + 1 },
     { header: '📅 التاريخ', accessor: 'date', render: (row) => formatIraqDate(row.date) },
-    { header: '👤 المتلقي', accessor: 'recipientName', render: (row) => row.recipientName || '—' },
+    { header: '👤 المتلقي', accessor: 'customerName', render: (row) => row.customerName || row.recipientName || '—' },
     { header: '💵 المبلغ', accessor: 'amount', render: (row) => <span className="font-bold text-green-600">{formatCurrency(row.amount)}</span> },
     { 
       header: '💳 الطريقة', 
@@ -186,24 +186,26 @@ export default function Collections() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* اختيار المتلقي */}
           <div>
-            <label className="form-label">👤 اسم المتلقي (عميل/موردين)</label>
-            <input 
-              type="text" 
-              placeholder="اكتب اسم المتلقي أو اختره من القائمة"
-              value={formData.recipientName}
+            <label className="form-label">👤 اسم المتلقي (العميل)</label>
+            <select 
+              value={formData.customerId}
               onChange={(e) => {
-                setFormData({ ...formData, recipientName: e.target.value });
+                const selectedCust = customers.find(c => c.id === e.target.value);
+                setFormData({ 
+                  ...formData, 
+                  customerId: e.target.value,
+                  customerName: selectedCust ? selectedCust.name : ''
+                });
                 setRecipientError('');
               }}
-              list="recipients-list"
-              className={`form-input border-2 transition-colors ${
+              className={`form-select border-2 transition-colors ${
                 recipientError ? 'border-red-500 bg-red-50' : 'border-gray-300 focus:border-blue-500'
               }`}
               required
-            />
-            <datalist id="recipients-list">
-              {customers.map(c => <option key={c.id} value={c.name} />)}
-            </datalist>
+            >
+              <option value="">اختر العميل...</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
             {recipientError && <p className="text-red-600 text-sm mt-1 font-semibold">{recipientError}</p>}
           </div>
 
@@ -306,7 +308,7 @@ export default function Collections() {
             <div className="bg-gray-50 p-4 rounded-lg space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-700">المتلقي:</span>
-                <span className="text-sm font-bold">{printingCollection.recipientName || '—'}</span>
+                <span className="text-sm font-bold">{printingCollection.customerName || printingCollection.recipientName || '—'}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-700">المبلغ المحصل:</span>

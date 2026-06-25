@@ -183,6 +183,19 @@ async function migratePostingSchema() {
       // ignore
     }
   }
+
+  // Migrate sale_items to include purchasePrice
+  try {
+    if (usePostgres) {
+      await executeQuery(`ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS purchasePrice REAL DEFAULT 0`);
+    } else {
+      await executeQuery(`ALTER TABLE sale_items ADD COLUMN purchasePrice REAL DEFAULT 0`);
+    }
+  } catch (err) {
+    if (!String(err.message).includes('duplicate column name')) {
+      console.error('Migration error on sale_items.purchasePrice:', err);
+    }
+  }
 }
 
 async function bootstrap() {
@@ -290,6 +303,7 @@ const POSTGRES_SCHEMA = `
     productName TEXT,
     qty INTEGER,
     price REAL,
+    purchasePrice REAL DEFAULT 0,
     total REAL
   );
   CREATE TABLE IF NOT EXISTS returns (
@@ -492,6 +506,7 @@ const SQLITE_SCHEMA = `
     productName TEXT,
     qty INTEGER,
     price REAL,
+    purchasePrice REAL DEFAULT 0,
     total REAL
   );
   CREATE TABLE IF NOT EXISTS returns (

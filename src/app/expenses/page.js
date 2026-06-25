@@ -51,7 +51,7 @@ export default function Expenses() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(withUser({
           ...formData,
-          amount: parseFloat(formData.amount)
+          amount: Math.max(0.1, parseFloat(formData.amount) || 0)
         }))
       });
       

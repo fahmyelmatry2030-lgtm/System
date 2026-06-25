@@ -1,6 +1,6 @@
 import DashboardCard from '@/components/DashboardCard';
 import PendingAlert from '@/components/PendingAlert';
-import DashboardCharts from '@/components/DashboardCharts';
+import RoleGuard from '@/components/RoleGuard';
 import { DollarSign, Wallet, LineChart, Receipt, Layers, Box, AlertTriangle, Users, ShoppingCart, ArrowDownLeft, FileText } from 'lucide-react';
 import { query } from '@/lib/db';
 import { formatCurrency } from '@/lib/currency';
@@ -34,13 +34,13 @@ export default async function Dashboard() {
   
   // Sales Profit Calculation
   const saleItems = (await query(`
-    SELECT si.*, p.purchasePrice 
+    SELECT si.*, p.purchasePrice as currentPurchasePrice 
     FROM sale_items si 
     LEFT JOIN products p ON si.productId = p.id
   `)).rows;
   const salesProfit = saleItems.reduce((acc, item) => {
     const salePrice = (item.price || 0) * (item.qty || 0);
-    const cost = (item.purchasePrice || 0) * (item.qty || 0);
+    const cost = (item.purchasePrice || item.currentPurchasePrice || 0) * (item.qty || 0);
     return acc + (salePrice - cost);
   }, 0);
 
@@ -108,7 +108,7 @@ export default async function Dashboard() {
   const totalCashFlow = totalPaidSales - totalPaidPurchases;
   
   // Cash position
-  const estimatedCash = totalPaidSales - totalPaidPurchases - totalExpenses - totalDamagedValue;
+  const estimatedCash = totalPaidSales - totalPaidPurchases - totalExpenses;
 
   // Pending invoices
   const pendingSalesInvoices = sales.filter(s => s.postStatus !== 'posted').slice(0, 10);
@@ -180,8 +180,10 @@ export default async function Dashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        <DashboardCard 
+      <RoleGuard allowedRoles={['admin', 'accountant']}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <DashboardCard 
+
           title="قيمة المخزون" 
           value={formatCurrency(totalStockValue)} 
           icon={Wallet} 
@@ -207,9 +209,11 @@ export default async function Dashboard() {
           subtitle1="المبيعات" val2={formatCurrency(totalSalesValue)}
           subtitle2="الربح" val3={formatCurrency(salesProfit)}
         />
-        
-        <DashboardCard 
-          title="إجمالي الكميات" 
+        </RoleGuard>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full col-span-full">
+          <DashboardCard 
+            title="إجمالي الكميات" 
           value={totalQuantity.toLocaleString()} 
           icon={Layers} 
           colorClass="bg-gradient-to-br from-[#818cf8] to-[#6366f1]" 
@@ -257,9 +261,12 @@ export default async function Dashboard() {
           icon={AlertTriangle} 
           colorClass="bg-gradient-to-br from-[#fca5a5] to-[#ef4444]" 
         />
+        </div>
 
-        <DashboardCard 
-          title="المشتريات المعلقة" 
+        <RoleGuard allowedRoles={['admin', 'accountant']}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full col-span-full">
+          <DashboardCard 
+            title="المشتريات المعلقة" 
           value={pendingPurchases.toLocaleString()} 
           icon={FileText} 
           colorClass="bg-gradient-to-br from-[#fbbf24] to-[#f59e0b]" 
@@ -296,8 +303,10 @@ export default async function Dashboard() {
           colorClass="bg-gradient-to-br from-[#86efac] to-[#22c55e]" 
           subtitle1="عدد الموردين" val2={suppliersWithCredits.length}
         />
-      </div>
+        </div>
+      </RoleGuard>
 
+      <RoleGuard allowedRoles={['admin', 'accountant']}>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         <div className="lg:col-span-2 bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
           <h3 className="text-lg font-bold text-gray-800 mb-1">ملخص مالي</h3>
@@ -421,13 +430,14 @@ export default async function Dashboard() {
             <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
               <p className="font-semibold mb-2">ملاحظة: هذا تقدير بناءً على:</p>
               <ul className="space-y-1 list-disc list-inside">
-                <li>المبيعات المدفوعة - المشتريات - المصروفات - التوالف</li>
+                <li>المبيعات المدفوعة - المشتريات - المصروفات</li>
                 <li>لا يشمل الديون والقروض</li>
               </ul>
             </div>
           </div>
         </div>
       </div>
+      </RoleGuard>
 
       <div className="grid grid-cols-1 gap-6 mt-6">
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
@@ -458,6 +468,7 @@ export default async function Dashboard() {
         </div>
       </div>
 
+      <RoleGuard allowedRoles={['admin', 'accountant']}>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
           <h3 className="text-lg font-bold text-gray-800 mb-1">📊 أكثر الموردين ديناً</h3>
@@ -519,7 +530,9 @@ export default async function Dashboard() {
           )}
         </div>
       </div>
+      </RoleGuard>
 
+      <RoleGuard allowedRoles={['admin', 'accountant']}>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
           <h3 className="text-lg font-bold text-gray-800 mb-1">⏳ فواتير المشتريات المعلقة</h3>
@@ -571,6 +584,7 @@ export default async function Dashboard() {
           )}
         </div>
       </div>
+      </RoleGuard>
     </div>
   );
 }
